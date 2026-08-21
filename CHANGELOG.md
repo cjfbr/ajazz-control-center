@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`streamdock-host --list` diagnostic mode** (2026-08-21): dumps every HID interface the host
+  can see as one JSON line each — VID:PID, usage page, product/serial strings, whether the SKU is
+  recognised and at which protocol version, plus (on Linux) the `/dev/hidraw*` node and whether
+  this process can open it read-write. That last flag is the decisive check for a missing udev
+  `uaccess` rule, the most common reason a Stream Dock enumerates but does nothing.
+- **Eight more AKP03 / N3 USB identities registered** (2026-08-21), all from the
+  `opendeck-akp03` catalogue and previously unrecognised: `0x0300:0x1001` (AKP03),
+  `0x6602:0x1000` (Mirabox N3), `0x1500:0x3001` (Soomfon Stream Controller SE), `0x0b00:0x1001`
+  (Mars Gaming MSD-TWO), `0x5548:0x1001` (TreasLin N3), `0x0200:0x2000` (Redragon Skyrider
+  SS-551), plus `0x0300:0x3002` as `akp03e_rev2` and `0x5548:0x6670` (Mirabox HSV293S) on the
+  AKP153 side.
+
 - **AKP05 Pro/retail SKUs registered** (2026-07-03, issue #85): `0x0300:0x3013` (AKP05E Pro),
   `0x3014` (AKP05CN Pro) and `0x3006` (AKP05 retail) are now recognised by the sidecar and the
   device registry — PIDs and protocol (v3, AKP05E image formats) mirrored from the upstream
@@ -63,6 +75,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Live-verified: helper respawns 1000→5000 ms and back; tile cadence follows the setting.
 
 ### Fixed
+
+- **AJAZZ AKP03 / AKP03E did nothing when plugged in on Linux** (2026-08-21, user report). Four
+  independent defects, each on its own sufficient to make the device enumerate, appear in the
+  sidebar and then respond to nothing:
+  - **Wrong family for two PIDs.** `0x0300:0x1001` and `0x0300:0x1002` were registered as
+    AKP153 / AKP153E. Both `4ndv/opendeck-akp03` and `4ndv/opendeck-akp153` — and this repo's
+    own `docs/protocols/streamdeck/akp03.md` — put them in the AKP03 family. Because the AKP153
+    is a mirajazz protocol-version-1 device, an AKP03E on `0x1002` was opened with 512-byte HID
+    framing instead of 1024: every write was ignored and no input ever came back. They now
+    register as `akp03` / `akp03e`, and the canonical AKP153 pairs (`0x5548:0x6674`,
+    `0x0300:0x1010`) took over the `akp153` / `akp153e` codenames from the `_v1` / `_v2`
+    aliases, which are gone.
+  - **Protocol version and image format were per-family, not per-SKU.** `0x0300:0x3002` is the
+    *rev. 2* AKP03E — protocol version 3 with 64x64 (Rot90) keys, not the pv2 / 60x60 (Rot0) of
+    the original. It is now `akp03e_rev2`, and `kind.rs` carries the pv2/pv3 split for the whole
+    family (`0x3003`, `0x6603:0x1002`, `0x6603:0x1003` and the four licensee rebadges are pv3).
+  - **The AKP05's key and input tables were applied to every family.** Key images were uploaded
+    to wire slots 10..14, past the end of the AKP03's 9 surfaces, so the panel stayed dark; the
+    three plain buttons (`0x25`/`0x30`/`0x31`) and encoder 2 (`0x60`/`0x61`/`0x34`) had no
+    table entry and were dropped, while encoder 0's codes (`0x90`/`0x91`/`0x33`) fired
+    encoder 2. `mapAkp03Input` / `mapAkp153Input` now exist alongside the AKP05 table, selected
+    from the descriptor's geometry; `displayInfo()` and `encoderInfo().hasScreens` follow the
+    family too (the AKP03's knobs have no screens, and zone uploads to them are now no-ops).
+  - **No udev rule for the Mirabox and rebadge vendor IDs.** Only `0x0300` was tagged, so a
+    Mirabox N3/N4/HSV293S — and the AJAZZ AKP815, which is `0x5548:0x6672` — got no `uaccess`
+    ACL and could not be opened at all. `70-ajazz.rules` now covers `0x5548`, `0x6602`, `0x6603`
+    and, scoped to their exact product IDs, the squatted `0x1500` / `0x0b00` / `0x0200`.
+- **The sidecar never enumerated three registered SKUs** (2026-08-21): `streamdock-host` kept a
+  hand-maintained `KNOWN_VID_PIDS` list beside its parameter table, and the AKP05 Pro/retail
+  PIDs added in the previous release went into the table only. Enumeration queries are now
+  derived from the SKU table, so the two cannot drift.
+- **`SidecarStreamDockDevice::open()` reported success when no device had been opened**
+  (2026-08-21): it waited only for the sidecar's `ready` event, which means "enumeration
+  finished", not "your device is open". A device that enumerates but cannot be opened (missing
+  udev rule, wrong protocol version, handle already held) therefore looked connected while every
+  command went to serial `""` and was answered with `no device`. `open()` now requires a
+  `connected` event for its own VID:PID and otherwise throws with the udev remedy; each sidecar
+  is additionally scoped to one device via new `--vid` / `--pid` flags, so two attached docks can
+  no longer cross-wire.
 
 - **Physical key presses ran the NEIGHBOURING key's builtin/Toggle/Multi-Action chain**
   (2026-07-03, found while cross-checking the vendor RE input conventions): the wire key index

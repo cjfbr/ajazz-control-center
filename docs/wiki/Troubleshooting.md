@@ -13,10 +13,11 @@ and attach it to the issue.
 1. Confirm the kernel sees it:
 
    ```bash
-   lsusb | grep -Ei '0300|3151|3554'
+   lsusb | grep -Ei '0300|5548|6602|6603|1500|0b00|0200|3151|3554'
    ```
 
    If nothing is shown, it is a cable / kernel issue, not an app issue.
+   Note the `VID:PID` it prints — the rest of this page refers to it.
 
 1. Install the udev rule (the `.deb`/`.rpm`/`.flatpak` packages do this
    automatically via post-install; if you built from source, run the
@@ -58,6 +59,40 @@ and attach it to the issue.
    ```bash
    make doctor
    ```
+
+## Linux: Stream Dock enumerates but nothing happens
+
+A Stream Dock (AKP03 / AKP03E / AKP153 / AKP05 / Mirabox N3 / N4 / HSV293S)
+that shows up in `lsusb` and in the app's sidebar but never lights up, never
+renders a key and never sends a press is almost always one of three things.
+The sidecar's diagnostic mode tells you which:
+
+```bash
+# next to the app binary, or wherever streamdock-host was installed
+streamdock-host --list
+```
+
+It prints one JSON line per HID interface. Find the line whose `vid`/`pid`
+match your device and read three fields:
+
+- **`known: false`** — the app does not recognise this `VID:PID` at all. Open
+  an issue with the whole line; adding the SKU is a one-line change in
+  `streamdock-host/src/kind.rs` and `src/devices/streamdeck/src/register.cpp`.
+- **`writable: false`** — the udev rule is not applying its `uaccess` ACL, so
+  the process cannot open `/dev/hidraw*`. This is the most common cause. Follow
+  "Linux: device is not detected" above from step 2, then **physically replug**
+  the device: on systemd ≥ 258 the ACL is only applied on a real replug or at
+  boot, never on `udevadm trigger`.
+- **`known: true` and `writable: true`** — the device is reachable and
+  recognised. Check the app log (`--log-level=debug`) for a
+  `streamdock-host enumerated but could not open ...` error, which means the
+  handle is held by someone else (see the `fuser` step above), and for
+  `input: code=0x.. state=.. -> UNMAPPED` lines, which mean the device sends
+  input the code table does not cover yet. Paste those lines into an issue.
+
+If the panel renders but the wrong key lights up, or a knob moves the wrong
+control, that is a mapping bug rather than a connection bug — include the
+`input:` log lines and the device's `VID:PID`.
 
 ## Windows: device is detected but no input / no display
 
