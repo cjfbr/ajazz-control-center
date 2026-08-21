@@ -27,12 +27,41 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 
 class QProcess;
 
 namespace ajazz::app {
+
+/// Which mirajazz family a descriptor belongs to.
+///
+/// Derived from the descriptor rather than stored: the three Stream Dock
+/// families the sidecar drives are already distinguishable by their geometry
+/// (AKP05 is the only one with touch zones; AKP153 the only one without
+/// encoders), so `streamDockSidecarDescriptors()` stays the single place SKUs
+/// are declared.
+enum class DockFamily : std::uint8_t {
+    Akp05,  ///< 10 keys + 4 encoders + 4 touch zones.
+    Akp03,  ///< 6 LCD keys + 3 plain buttons + 3 encoders, no zones.
+    Akp153, ///< key grid only.
+};
+
+/// Classify a descriptor into its mirajazz family.
+[[nodiscard]] DockFamily familyOf(core::DeviceDescriptor const& d) noexcept;
+
+/// Map a 1-based key index to the mirajazz hardware index for `set_button_image`.
+[[nodiscard]] std::uint8_t hwKeyForKeyIndex(DockFamily family, std::uint8_t oneBased) noexcept;
+
+/// Translate one sidecar `(code, state)` input frame into a core::DeviceEvent.
+/// Returns nullopt for codes this family does not define (e.g. the AKP03's
+/// 0x00 idle/keep-alive frame).
+[[nodiscard]] std::optional<core::DeviceEvent>
+mapSidecarInput(DockFamily family, std::uint8_t code, std::uint8_t state);
+
+/// Nominal per-key source size the app renders at, per family.
+[[nodiscard]] std::uint16_t keySourcePx(DockFamily family) noexcept;
 
 /// Injectable resolver for the streamdock-host binary path (tests fake it).
 using SidecarBinaryResolver = std::function<QString()>;
@@ -122,7 +151,8 @@ private:
     mutable std::mutex m_mutex; ///< Guards m_firmwareVersion + m_callback.
     std::string m_firmwareVersion{"unknown"};
     core::EventCallback m_callback;
-    bool m_ready{false}; ///< Set true once the sidecar emits its "ready" event.
+    bool m_ready{false};           ///< Set true once the sidecar emits its "ready" event.
+    bool m_deviceConnected{false}; ///< True once a `connected` event for OUR vid/pid arrived.
 };
 
 /// core::DeviceFactory entry point — see DeviceRegistry::registerDevice.

@@ -20,14 +20,31 @@
 
 namespace ajazz::app {
 
-namespace {
+DockFamily familyOf(core::DeviceDescriptor const& d) noexcept {
+    if (d.touchZoneCount > 0) {
+        return DockFamily::Akp05;
+    }
+    if (d.encoderCount > 0) {
+        return DockFamily::Akp03;
+    }
+    return DockFamily::Akp153;
+}
 
-/// Map our 1-based key index (2x5: 1..5 top row, 6..10 bottom) to the mirajazz
-/// hardware index (opendeck mappings.rs: top row 10..14, bottom 5..9).
-/// PROVISIONAL — verify against the panel in Slice 4 (the render_test photo
-/// confirmed the raw index->surface mapping renders; this row remap is the
-/// piece that pairs our grid order to it).
-[[nodiscard]] std::uint8_t hwKeyForKeyIndex(std::uint8_t oneBased) {
+/// Map our 1-based key index to the mirajazz hardware index for `set_button_image`.
+///
+/// mirajazz takes a 0-based index and writes `key + 1` on the wire, so for the
+/// families whose surfaces are contiguous the mapping is simply "minus one".
+/// The AKP05 is the exception: its BAT wire slots are not contiguous with the
+/// visual grid (opendeck mappings.rs: top row 10..14, bottom 5..9, slot 5 dead),
+/// hardware-confirmed on the 0x0300:0x3004 unit.
+///
+/// Before this was family-aware every family got the AKP05 remap, so an AKP03
+/// key 1..5 was uploaded to wire slots 10..14 — past the end of its 9 surfaces.
+/// The upload was accepted and rendered nowhere: the panel simply stayed dark.
+std::uint8_t hwKeyForKeyIndex(DockFamily family, std::uint8_t oneBased) noexcept {
+    if (family != DockFamily::Akp05) {
+        return oneBased > 0 ? static_cast<std::uint8_t>(oneBased - 1) : oneBased;
+    }
     if (oneBased >= 1 && oneBased <= 5) {
         return static_cast<std::uint8_t>(oneBased + 9); // 1->10 .. 5->14
     }
@@ -37,12 +54,14 @@ namespace {
     return oneBased;
 }
 
-/// Translate a sidecar (code,state) pair into a core::DeviceEvent.
+namespace {
+
+/// AKP05 / N4 input codes (opendeck-akp05 inputs.rs, N4-derived).
 ///
-/// Codes follow opendeck-akp05's N4-derived mapping (inputs.rs) — PROVISIONAL
-/// for the AKP05 (the demo unit emits no input; calibrate on a retail unit).
-[[nodiscard]] std::optional<core::DeviceEvent> mapSidecarInput(std::uint8_t code,
-                                                               std::uint8_t state) {
+/// PROVISIONAL: the 0x3004 demo unit emits no input, so this table is
+/// calibrated from upstream rather than from local hardware.
+[[nodiscard]] std::optional<core::DeviceEvent> mapAkp05Input(std::uint8_t code,
+                                                             std::uint8_t state) {
     using Kind = core::DeviceEvent::Kind;
     core::DeviceEvent e{};
 
@@ -111,7 +130,117 @@ namespace {
     }
 }
 
+/// AKP03 / N3 input codes.
+///
+/// Transcribed from `4ndv/opendeck-akp03` `inputs.rs` (`process_input`), which
+/// agrees with this repo's RE table in
+/// `docs/protocols/streamdeck/akp03.md` ("Action codes (input reports byte 9)").
+///
+/// The AKP05 table used to be applied to this family too, which silently broke
+/// most of the device: the three plain buttons (0x25/0x30/0x31) and encoder 2
+/// (0x60/0x61 twist, 0x34 press) had no entry at all and were dropped, while
+/// 0x90/0x91 and 0x33 landed on encoder 2 instead of encoder 0.
+[[nodiscard]] std::optional<core::DeviceEvent> mapAkp03Input(std::uint8_t code,
+                                                             std::uint8_t state) {
+    using Kind = core::DeviceEvent::Kind;
+    core::DeviceEvent e{};
+
+    switch (code) {
+    // --- Encoder twist. One frame per detent, no release edge. -----------
+    case 0x90: // left / large knob
+        e = {Kind::EncoderTurned, 0, -1};
+        return e;
+    case 0x91:
+        e = {Kind::EncoderTurned, 0, 1};
+        return e;
+    case 0x50: // middle (top)
+        e = {Kind::EncoderTurned, 1, -1};
+        return e;
+    case 0x51:
+        e = {Kind::EncoderTurned, 1, 1};
+        return e;
+    case 0x60: // right
+        e = {Kind::EncoderTurned, 2, -1};
+        return e;
+    case 0x61:
+        e = {Kind::EncoderTurned, 2, 1};
+        return e;
+
+    // --- Encoder press (0x33 -> 0, 0x35 -> 1, 0x34 -> 2). ----------------
+    case 0x33:
+        e = {state ? Kind::EncoderPressed : Kind::EncoderReleased, 0, state};
+        return e;
+    case 0x35:
+        e = {state ? Kind::EncoderPressed : Kind::EncoderReleased, 1, state};
+        return e;
+    case 0x34:
+        e = {state ? Kind::EncoderPressed : Kind::EncoderReleased, 2, state};
+        return e;
+
+    // --- The three plain (non-LCD) buttons under the grid. ---------------
+    // They continue the key numbering: keys 1..6 are the LCD grid, 7..9 these.
+    case 0x25:
+        e = {state ? Kind::KeyPressed : Kind::KeyReleased, 7, state};
+        return e;
+    case 0x30:
+        e = {state ? Kind::KeyPressed : Kind::KeyReleased, 8, state};
+        return e;
+    case 0x31:
+        e = {state ? Kind::KeyPressed : Kind::KeyReleased, 9, state};
+        return e;
+
+    default:
+        // LCD keys report their 1-based index directly (1..6). Code 0x00 is
+        // the idle/keep-alive NOP frame and must stay unmapped.
+        if (code >= 1 && code <= 6) {
+            e = {state ? Kind::KeyPressed : Kind::KeyReleased, code, state};
+            return e;
+        }
+        return std::nullopt;
+    }
+}
+
+/// AKP153 / HSV293S input codes — a plain key grid, 1-based index in byte 9.
+[[nodiscard]] std::optional<core::DeviceEvent> mapAkp153Input(std::uint8_t code,
+                                                              std::uint8_t state) {
+    using Kind = core::DeviceEvent::Kind;
+    if (code >= 1 && code <= 18) {
+        return core::DeviceEvent{state ? Kind::KeyPressed : Kind::KeyReleased, code, state};
+    }
+    return std::nullopt;
+}
+
 } // namespace
+
+/// Translate a sidecar (code,state) pair into a core::DeviceEvent for `family`.
+std::optional<core::DeviceEvent>
+mapSidecarInput(DockFamily family, std::uint8_t code, std::uint8_t state) {
+    switch (family) {
+    case DockFamily::Akp05:
+        return mapAkp05Input(code, state);
+    case DockFamily::Akp03:
+        return mapAkp03Input(code, state);
+    case DockFamily::Akp153:
+        return mapAkp153Input(code, state);
+    }
+    return std::nullopt;
+}
+
+/// Nominal per-key source size the app renders at, per family. The sidecar
+/// (mirajazz) rescales to the SKU's real wire format, so this only decides how
+/// much detail the render pipeline hands over — it must not be smaller than the
+/// wire size or the panel gets an upscaled key.
+std::uint16_t keySourcePx(DockFamily family) noexcept {
+    switch (family) {
+    case DockFamily::Akp05:
+        return 112;
+    case DockFamily::Akp03:
+        return 64; // 60x60 on pv2 silicon, 64x64 on pv3 — render at the larger.
+    case DockFamily::Akp153:
+        return 85;
+    }
+    return 112;
+}
 
 QString defaultSidecarBinary() {
     QString const env = qEnvironmentVariable("AJAZZ_STREAMDOCK_HOST");
@@ -160,7 +289,17 @@ void SidecarStreamDockDevice::open() {
 
     m_process = std::make_unique<QProcess>();
     m_process->setProcessChannelMode(QProcess::SeparateChannels);
-    m_process->start(exe, QStringList{QStringLiteral("--allow-output")});
+    // Scope the sidecar to THIS device. Without the filter it opens every
+    // Stream Dock it can find and the app adopts whichever serial arrives
+    // first, so with two docks attached one proxy could drive the other's
+    // panel — and with none openable it still reported success.
+    m_process->start(
+        exe,
+        QStringList{QStringLiteral("--allow-output"),
+                    QStringLiteral("--vid"),
+                    QStringLiteral("0x%1").arg(m_id.vendorId, 4, 16, QLatin1Char('0')),
+                    QStringLiteral("--pid"),
+                    QStringLiteral("0x%1").arg(m_id.productId, 4, 16, QLatin1Char('0'))});
 
     if (!m_process->waitForStarted(3000)) {
         QString const err = m_process->errorString();
@@ -173,6 +312,7 @@ void SidecarStreamDockDevice::open() {
     QElapsedTimer timer;
     timer.start();
     m_ready = false;
+    m_deviceConnected = false;
     while (timer.elapsed() < 5000 && !m_ready) {
         if (m_process->state() != QProcess::Running) {
             break;
@@ -185,6 +325,25 @@ void SidecarStreamDockDevice::open() {
         QString const err = m_process->errorString();
         close();
         throw std::runtime_error("streamdock-host did not become ready: " + err.toStdString());
+    }
+
+    // "ready" only means enumeration finished — it says nothing about whether
+    // our device was actually opened. Treating it as success was why a device
+    // that enumerates but cannot be opened (missing udev `uaccess` rule, wrong
+    // protocol version, already-held handle) looked connected in the UI while
+    // every command silently went to serial "" and was answered with
+    // "no device". Fail loudly instead.
+    if (!m_deviceConnected) {
+        close();
+        QString const usb = QStringLiteral("%1:%2")
+                                .arg(m_id.vendorId, 4, 16, QLatin1Char('0'))
+                                .arg(m_id.productId, 4, 16, QLatin1Char('0'));
+        throw std::runtime_error(
+            "streamdock-host enumerated but could not open " + m_descriptor.model + " (" +
+            usb.toStdString() +
+            "). On Linux this is usually a missing udev rule: install "
+            "resources/linux/70-ajazz.rules, reload udev and replug the device. Run "
+            "`streamdock-host --list` to see what the HID layer exposes.");
     }
 
     // Switch to async input: deliver subsequent stdout via the event loop.
@@ -214,6 +373,7 @@ void SidecarStreamDockDevice::close() {
     }
     m_process.reset();
     m_ready = false;
+    m_deviceConnected = false;
 }
 
 bool SidecarStreamDockDevice::isOpen() const noexcept {
@@ -231,8 +391,12 @@ std::size_t SidecarStreamDockDevice::poll() {
 
 core::DisplayInfo SidecarStreamDockDevice::displayInfo() const noexcept {
     core::DisplayInfo info{};
-    info.widthPx = 112;
-    info.heightPx = 112;
+    // Per family, not a hardcoded AKP05 112x112: an AKP03 key is 60/64 px and
+    // an AKP153 key 85 px on the wire. The sidecar rescales whatever it gets,
+    // but the app sizes its render surface from this.
+    auto const px = keySourcePx(familyOf(m_descriptor));
+    info.widthPx = px;
+    info.heightPx = px;
     info.keyRows = m_descriptor.keyRows;
     info.keyCols = static_cast<std::uint8_t>(m_descriptor.gridColumns);
     info.jpegEncoded = true;
@@ -247,7 +411,7 @@ void SidecarStreamDockDevice::setKeyImage(std::uint8_t keyIndex,
         return;
     }
     writeCommand(sidecar::buildSetImage(effectiveSerial(),
-                                        hwKeyForKeyIndex(keyIndex),
+                                        hwKeyForKeyIndex(familyOf(m_descriptor), keyIndex),
                                         /*touchzone=*/false,
                                         width,
                                         height,
@@ -305,7 +469,9 @@ core::EncoderInfo SidecarStreamDockDevice::encoderInfo() const noexcept {
     core::EncoderInfo info{};
     info.count = static_cast<std::uint8_t>(m_descriptor.encoderCount);
     info.pressable = true;
-    info.hasScreens = true;
+    // Only the AKP05 family backs its encoders with touch-strip zones; the
+    // AKP03's three knobs have no screen at all.
+    info.hasScreens = m_descriptor.touchZoneCount > 0;
     info.stepsPerRevolution = 0; // endless
     return info;
 }
@@ -314,7 +480,10 @@ void SidecarStreamDockDevice::setEncoderImage(std::uint8_t index,
                                               std::span<std::uint8_t const> rgba,
                                               std::uint16_t width,
                                               std::uint16_t height) {
-    if (!isOpen()) {
+    // Families without touch zones (AKP03, AKP153) have no encoder screens;
+    // sending a zone upload there would push a 128x128 zone-format image at a
+    // device that has no such surface.
+    if (!isOpen() || index >= m_descriptor.touchZoneCount) {
         return;
     }
     // Encoder touch zones are mirajazz hardware indices 0..3.
@@ -398,18 +567,34 @@ void SidecarStreamDockDevice::handleLine(QByteArray const& line) {
     using Type = sidecar::SidecarEvent::Type;
     switch (ev->type) {
     case Type::Connected: {
-        std::lock_guard const lock(m_mutex);
-        if (!ev->firmware.isEmpty()) {
-            m_firmwareVersion = ev->firmware.toStdString();
+        // Adopt the serial only when the sidecar opened OUR device. A sidecar
+        // that enumerated a different dock must not have its handle proxied
+        // through this object.
+        if (ev->vid != m_id.vendorId || ev->pid != m_id.productId) {
+            AJAZZ_LOG_WARN("sidecar",
+                           "ignoring connected event for {:04x}:{:04x} (this proxy is "
+                           "{:04x}:{:04x})",
+                           ev->vid,
+                           ev->pid,
+                           m_id.vendorId,
+                           m_id.productId);
+            break;
+        }
+        {
+            std::lock_guard const lock(m_mutex);
+            if (!ev->firmware.isEmpty()) {
+                m_firmwareVersion = ev->firmware.toStdString();
+            }
         }
         m_sidecarSerial = ev->serial;
+        m_deviceConnected = true;
         break;
     }
     case Type::Ready:
         m_ready = true;
         break;
     case Type::Input: {
-        auto const devEv = mapSidecarInput(ev->code, ev->state);
+        auto const devEv = mapSidecarInput(familyOf(m_descriptor), ev->code, ev->state);
         // Log EVERY input frame the mirajazz sidecar delivers — mapped or not.
         // The AKP05 code map is PROVISIONAL (N4-derived; the 0x3004 demo unit
         // emits nothing to calibrate against), so an unmapped code was dropped
