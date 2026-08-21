@@ -33,7 +33,28 @@
 # ---------------------------------------------------------------------------
 # Stream decks (Mirabox HSV293S family, AKP153 / AKP153E / AKP03 / AKP05)
 # ---------------------------------------------------------------------------
+# AJAZZ-branded Stream Dock VID. Covers AKP03/AKP03E/AKP03R, AKP153/AKP153E/
+# AKP153R and the AKP05 family.
 KERNEL=="hidraw*",    ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
+
+# Mirabox VIDs. The same silicon ships under Mirabox branding as the N3 / N3E /
+# N4 / HSV293S / AKP815 lines, and `register.cpp` binds those VID:PID pairs to
+# the same backends. Before 2026-08-21 only 0300 was tagged here, so a Mirabox-
+# branded unit (or an AJAZZ AKP815, which is 5548:6672) got no `uaccess` ACL:
+# it enumerated, the UI listed it, and every open() failed with EACCES.
+KERNEL=="hidraw*",    ATTRS{idVendor}=="5548", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="6602", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="6603", MODE="0660", TAG+="uaccess"
+
+# Licensee rebadges of the AKP03 / N3 board. These three use squatted (not
+# USB-IF-assigned) vendor IDs that other hardware could plausibly reuse, so
+# unlike the rules above they are scoped to the exact product ID as well.
+#   1500:3001 Soomfon Stream Controller SE
+#   0b00:1001 Mars Gaming MSD-TWO
+#   0200:2000 Redragon Skyrider SS-551
+KERNEL=="hidraw*", ATTRS{idVendor}=="1500", ATTRS{idProduct}=="3001", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="0b00", ATTRS{idProduct}=="1001", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="0200", ATTRS{idProduct}=="2000", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
 # VIA-compatible AJAZZ keyboards (SONiX vendor prefix 0x3151)
