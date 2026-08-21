@@ -56,21 +56,14 @@ devices:
   # See docs/protocols/streamdeck/_research-sources.md for the source tags
   # cited in the protocol docs and src/devices/streamdeck/src/register.cpp.
 
+  # 2026-08-21: `akp153` / `akp153e` used to sit on 0x0300:0x1001 / 0x0300:0x1002
+  # with `akp153_v1` / `akp153e_v2` holding the canonical pairs alongside them.
+  # Those two PIDs are AKP03 SKUs (see the akp03 rows below and the note in
+  # register.cpp), so the canonical pairs absorbed the plain codenames and the
+  # `_v1` / `_v2` aliases are gone.
   - codename: akp153
     family: streamdeck
-    name: "AJAZZ AKP153 / Mirabox HSV293S"
-    vid: "0x0300"
-    pid: "0x1001"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered)."
-
-  - codename: akp153_v1
-    family: streamdeck
-    name: "AJAZZ AKP153 (Mirabox V1 firmware)"
+    name: "AJAZZ AKP153"
     vid: "0x5548"
     pid: "0x6674"
     keys: 15
@@ -78,23 +71,23 @@ devices:
     maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware."
+    notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Canonical USB pair per ajazz-sdk and opendeck-akp153."
+
+  - codename: hsv293s
+    family: streamdeck
+    name: "Mirabox HSV293S"
+    vid: "0x5548"
+    pid: "0x6670"
+    keys: 15
+    encoders: 0
+    maturity: scaffolded
+    capabilities: [display, rgb, macros, firmware, clock]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes: "Mirabox-branded AKP153 (opendeck-akp153 catalogue, 0x5548:0x6670). Same backend; the AKP153 row previously claimed to cover it under the wrong VID:PID."
 
   - codename: akp153e
     family: streamdeck
-    name: "AJAZZ AKP153E (China variant)"
-    vid: "0x0300"
-    pid: "0x1002"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`)."
-
-  - codename: akp153e_v2
-    family: streamdeck
-    name: "AJAZZ AKP153E (Mirabox V2 firmware)"
+    name: "AJAZZ AKP153E"
     vid: "0x0300"
     pid: "0x1010"
     keys: 15
@@ -102,7 +95,7 @@ devices:
     maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153."
+    notes: "Canonical AKP153E PID per ajazz-sdk and opendeck-akp153; same protocol as AKP153."
 
   - codename: akp153r
     family: streamdeck
@@ -138,11 +131,23 @@ devices:
         - "Real-device capture to promote probed -> partial"
         - "800x480 strip image upload validation"
 
-  # NOTE: there is deliberately no bare `akp03` @ 0x0300:0x1001 entry. That PID
-  # belongs to AKP153 at runtime (see register.cpp: "0x0300:0x1001 wins over
-  # AKP03"), so a codename: akp03 row here would advertise a device that can
-  # never bind. The real AKP03 family is the akp03_legacy/akp03e/akp03r rows
-  # below plus the Mirabox N3 rebadges.
+  # AKP03 / N3 family: 6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side
+  # buttons. Protocol version is per SKU, not per family — the "rev. 2" silicon
+  # and the 0x6603 Mirabox units are protocol_version 3 and upload 64x64 (Rot90)
+  # keys; everything else is protocol_version 2 with 60x60 (Rot0) keys. The
+  # sidecar's streamdock-host/src/kind.rs holds the authoritative split.
+  - codename: akp03
+    family: streamdeck
+    name: "AJAZZ AKP03"
+    vid: "0x0300"
+    pid: "0x1001"
+    keys: 6
+    encoders: 3
+    maturity: functional
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Canonical AKP03 pair per ajazz-sdk and opendeck-akp03. Registered as AKP153 until 2026-08-21, which opened it with protocol-version-1 (512-byte) framing so the device never responded."
+
   - codename: akp03_legacy
     family: streamdeck
     name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
@@ -159,13 +164,25 @@ devices:
     family: streamdeck
     name: "AJAZZ AKP03E"
     vid: "0x0300"
+    pid: "0x1002"
+    keys: 6
+    encoders: 3
+    maturity: functional
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Canonical AKP03E pair per ajazz-sdk and opendeck-akp03; protocol_version 2, 60x60 (Rot0) keys. Registered as AKP153E until 2026-08-21, which opened it with protocol-version-1 (512-byte) framing so the device never responded."
+
+  - codename: akp03e_rev2
+    family: streamdeck
+    name: "AJAZZ AKP03E rev. 2"
+    vid: "0x0300"
     pid: "0x3002"
     keys: 6
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family."
+    notes: "Second-revision AKP03E silicon. Per opendeck-akp03 this is a protocol_version 3 device (both press and release edges) with 64x64 (Rot90) keys, not the 60x60 (Rot0) of the original. Carried the `akp03e` codename and protocol_version 2 until 2026-08-21."
 
   - codename: akp03r
     family: streamdeck
@@ -248,6 +265,66 @@ devices:
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Mirabox SKU variant per opendeck-akp03 udev rules."
+
+  - codename: mirabox_n3_6602_1000
+    family: streamdeck
+    name: "Mirabox N3 (6602:1000)"
+    vid: "0x6602"
+    pid: "0x1000"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/mirabox_n3.md
+    notes: "Mirabox N3 USB pair from the opendeck-akp03 catalogue that this project had never registered. protocol_version 2."
+
+  - codename: soomfon_stc_se
+    family: streamdeck
+    name: "Soomfon Stream Controller SE"
+    vid: "0x1500"
+    pid: "0x3001"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Licensee rebadge of the AKP03 / N3 board (opendeck-akp03 catalogue). protocol_version 3."
+
+  - codename: msd_two
+    family: streamdeck
+    name: "Mars Gaming MSD-TWO"
+    vid: "0x0b00"
+    pid: "0x1001"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Licensee rebadge of the AKP03 / N3 board (opendeck-akp03 catalogue). protocol_version 3."
+
+  - codename: treaslin_n3
+    family: streamdeck
+    name: "TreasLin N3"
+    vid: "0x5548"
+    pid: "0x1001"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Licensee rebadge of the AKP03 / N3 board (opendeck-akp03 catalogue). protocol_version 3."
+
+  - codename: redragon_ss551
+    family: streamdeck
+    name: "Redragon Skyrider SS-551"
+    vid: "0x0200"
+    pid: "0x2000"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Licensee rebadge of the AKP03 / N3 board (opendeck-akp03 catalogue). protocol_version 3."
 
   - codename: akp05
     family: streamdeck

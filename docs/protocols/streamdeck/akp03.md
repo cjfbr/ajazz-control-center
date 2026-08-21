@@ -4,11 +4,12 @@
 > non-LCD buttons**. The N3 nickname covers a long list of rebadges sold
 > under different brand names with identical firmware.
 >
-> ⚠️ **In-tree gap (2026-05-14):** the current `akp03.cpp` models only
-> "6 keys + 1 encoder". That is wrong — the device has **3 encoders and
-> 3 non-LCD buttons** in addition to the 6 LCD keys. This document is the
-> spec the implementation must converge to; a tracking entry exists in
-> `TODO.md` under "AKP03 layout reconciliation".
+> ✅ **Status (2026-08-21):** the family is driven by the out-of-process
+> mirajazz sidecar (`streamdock-host/`), not by in-tree C++ wire code — the
+> old `akp03.cpp` was removed in the `experiment/mirajazz` Slice D. The
+> per-SKU parameters (protocol version, image format) live in
+> `streamdock-host/src/kind.rs`; the input code table below is implemented in
+> `src/app/src/sidecar_stream_dock_device.cpp::mapAkp03Input`.
 
 ## Hardware
 
@@ -54,12 +55,22 @@ From `[companion]`'s N3 mapping diagram (recreated in ASCII):
 
 `[ajazz-sdk]` knows the AJAZZ-branded SKUs:
 
-| Codename in `[ajazz-sdk]` | Marketing name     | VID      | PID      |
-| ------------------------- | ------------------ | -------- | -------- |
-| `Akp03`                   | AJAZZ AKP03        | `0x0300` | `0x1001` |
-| `Akp03E`                  | AJAZZ AKP03E       | `0x0300` | `0x3002` |
-| `Akp03R`                  | AJAZZ AKP03R       | `0x0300` | `0x1003` |
-| `Akp03RRev2`              | AJAZZ AKP03R rev 2 | `0x0300` | `0x3003` |
+| Codename in `[opendeck-akp03]` | Marketing name      | VID      | PID      | Protocol |
+| ------------------------------ | ------------------- | -------- | -------- | -------- |
+| `Akp03`                        | AJAZZ AKP03         | `0x0300` | `0x1001` | v2       |
+| `Akp03E`                       | AJAZZ AKP03E        | `0x0300` | `0x1002` | v2       |
+| `Akp03R`                       | AJAZZ AKP03R        | `0x0300` | `0x1003` | v2       |
+| `Akp03Erev2`                   | AJAZZ AKP03E rev. 2 | `0x0300` | `0x3002` | v3       |
+| `Akp03Rrev2`                   | AJAZZ AKP03R rev. 2 | `0x0300` | `0x3003` | v3       |
+
+⚠️ **`0x0300:0x3002` is the rev. 2 AKP03E, not the original.** The original
+AKP03E is `0x0300:0x1002`. Until 2026-08-21 this project had `0x1002`
+registered as an **AKP153E** and `0x3002` as the plain AKP03E at protocol
+version 2. Both were wrong in a way that made the device unusable rather than
+merely degraded: the mirajazz protocol version selects the HID packet size
+(512 bytes for v1, 1024 for v2+), so an AKP03E opened as a v1 AKP153E received
+512-byte writes it ignored — it enumerated, the UI listed it, and nothing else
+ever happened.
 
 `[opendeck-akp03]` adds the Mirabox-branded and licensee-branded units
 sharing the same firmware:
@@ -74,33 +85,37 @@ sharing the same firmware:
 | TreasLin N3                  | `0x5548` | `0x1001` |
 | Redragon Skyrider SS-551     | `0x0200` | `0x2000` |
 
-⚠️ **The current `register.cpp` lists `0x0300:0x3001` for `akp03` — that is
-wrong**: per `[ajazz-sdk]` the canonical AJAZZ AKP03 PID is `0x1001`, not
-`0x3001`. The fix is part of the `AKP03 layout reconciliation` TODO. The
-hot-plug capture from `[capture-2026-05-13]` surfaced **`0x0300:0x3004`** —
-not present in either `[ajazz-sdk]` or `[opendeck-akp03]` — so it is most
-likely a new AKP03 sibling or pre-production unit. We register it but
-treat it as `scaffolded`.
+`register.cpp` also keeps one in-tree-only pair, `0x0300:0x3001`
+(`akp03_legacy`), which appears in no upstream catalogue; it is registered at
+protocol version 2 for backwards compatibility. Note that `0x0300:0x3004`,
+surfaced by `[capture-2026-05-13]`, is **not** an AKP03 sibling — a live
+`CRT VER` handshake proved it an AKP05E (see `akp05_vendor.md` §14.1).
 
 ### USB identifier map (canonical, post-2026-05-14)
 
 ```
-0x0300:0x1001 AKP03     (was registered as 0x3001 — fix in TODO)
-0x0300:0x3002 AKP03E
-0x0300:0x1003 AKP03R
-0x0300:0x3003 AKP03R rev 2
-0x0300:0x3004 Unknown sibling (HOTSPOTEKUSB HID DEMO) — see register.cpp:97
-0x6602:0x1002 Mirabox N3
-0x6603:0x1002 Mirabox N3 rev 3
-0x6603:0x1003 Mirabox N3EN
-0x1500:0x3001 Soomfon Stream Controller SE
-0x0B00:0x1001 Mars Gaming MSD-TWO
-0x5548:0x1001 TreasLin N3
-0x0200:0x2000 Redragon Skyrider SS-551
+protocol v2 (1024-byte packets, 60x60 Rot0 keys)
+  0x0300:0x1001 AKP03
+  0x0300:0x1002 AKP03E
+  0x0300:0x1003 AKP03R
+  0x0300:0x3001 AKP03 (legacy, in-tree only)
+  0x6602:0x1000 Mirabox N3
+  0x6602:0x1002 Mirabox N3
+  0x6602:0x1003 Mirabox N3E (in-tree only)
+
+protocol v3 (1024-byte packets, 64x64 Rot90 keys, both press+release edges)
+  0x0300:0x3002 AKP03E rev. 2
+  0x0300:0x3003 AKP03R rev. 2
+  0x6603:0x1002 Mirabox N3 rev. 3
+  0x6603:0x1003 Mirabox N3EN
+  0x1500:0x3001 Soomfon Stream Controller SE
+  0x0B00:0x1001 Mars Gaming MSD-TWO
+  0x5548:0x1001 TreasLin N3
+  0x0200:0x2000 Redragon Skyrider SS-551
 ```
 
-Cumulatively this is **12 distinct USB identifiers** that should all open
-the same N3 backend.
+Cumulatively this is **15 distinct USB identifiers** that all open the same
+N3 backend; all 15 are registered in `register.cpp` and `kind.rs`.
 
 ## Features that must work
 
@@ -148,11 +163,10 @@ Bytes 9 carries the action code:
 | `0x34`       | Encoder 2 press                                                                                                           |
 | `0x00`       | NOP / keep-alive frame                                                                                                    |
 
-⚠️ The current `parseInputReport` in `akp03.cpp` only recognises
-`0x01..0x06` (keys) and `tag & 0xF0 == 0x20` (encoder index) — that misses
-**every** action code above 0x20 except those that happen to fall in the
-0x20..0x2F range. Concretely it drops every event from buttons 7-9 and
-all three encoders. The parser table must be rewritten against this table.
+ℹ️ Implemented in `mapAkp03Input`. Until 2026-08-21 the app applied the
+**AKP05** code table to this family, which silently dropped buttons 7-9
+(`0x25`/`0x30`/`0x31`), dropped encoder 2 entirely (`0x60`/`0x61`/`0x34`) and
+routed encoder 0's codes (`0x90`/`0x91`/`0x33`) to encoder 2.
 
 ### Press / release encoding
 
@@ -172,10 +186,13 @@ The backend must synthesise the missing edge so consumers see uniform
 Identical structure to AKP153 but with 1024-byte chunks and the per-model
 image format from `[ajazz-sdk]`:
 
-| Model                   | Encoding | Size    | Rotation | Mirror |
-| ----------------------- | -------- | ------- | -------- | ------ |
-| AKP03 / AKP03E / AKP03R | JPEG     | 60 × 60 | `Rot0`   | none   |
-| AKP03R rev. 2           | JPEG     | 64 × 64 | `Rot90`  | none   |
+| Model                         | Encoding | Size    | Rotation | Mirror |
+| ----------------------------- | -------- | ------- | -------- | ------ |
+| protocol v2 (AKP03/E/R, N3)   | JPEG     | 60 × 60 | `Rot0`   | none   |
+| protocol v3 (rev. 2, N3EN, …) | JPEG     | 64 × 64 | `Rot90`  | none   |
+
+The split is by protocol version, not by marketing name — see the USB
+identifier map above and `streamdock-host/src/kind.rs::key_image_format`.
 
 Boot logo:
 

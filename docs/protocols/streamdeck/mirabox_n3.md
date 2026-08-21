@@ -36,12 +36,16 @@ The AJAZZ-branded `akp03` line is at:
 | Codename      | Marketing name      | VID:PID         | Status     |
 | ------------- | ------------------- | --------------- | ---------- |
 | `akp03`       | AJAZZ AKP03         | `0x0300:0x1001` | functional |
-| `akp03e`      | AJAZZ AKP03E        | `0x0300:0x3002` | functional |
+| `akp03e`      | AJAZZ AKP03E        | `0x0300:0x1002` | functional |
 | `akp03r`      | AJAZZ AKP03R        | `0x0300:0x1003` | functional |
+| `akp03e_rev2` | AJAZZ AKP03E rev. 2 | `0x0300:0x3002` | functional |
 | `akp03r_rev2` | AJAZZ AKP03R rev. 2 | `0x0300:0x3003` | scaffolded |
 
-See [`akp03.md`](./akp03.md) for the full per-SKU table including the legacy
-`0x0300:0x3001` and the `0x0300:0x3004` hot-plug capture variant.
+⚠️ Corrected 2026-08-21: `akp03e` was on `0x0300:0x3002` (which is the rev. 2
+unit) and `0x0300:0x1002` was mis-filed as an AKP153E. See
+[`akp03.md`](./akp03.md) for the full per-SKU table, the protocol-version
+split and the legacy `0x0300:0x3001` pair. `0x0300:0x3004` is **not** an AKP03
+sibling — it is an AKP05E (`akp05_vendor.md` §14.1).
 
 ## What "partial" means here
 

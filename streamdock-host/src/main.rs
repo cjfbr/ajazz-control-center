@@ -12,9 +12,10 @@ mod kind;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use futures_lite::StreamExt;
 use image::{DynamicImage, RgbaImage};
 use mirajazz::{
-    device::{Device, DeviceQuery, list_devices},
+    device::{list_devices, new_hid_backend, Device, DeviceQuery},
     error::MirajazzError,
     types::DeviceInput,
 };
@@ -23,47 +24,163 @@ use tokio::{
     sync::Mutex,
 };
 
-use kind::{Family, key_image_format, params_for, zone_image_format};
+use kind::{key_image_format, known_vid_pids, params_for, zone_image_format, DeviceParams, Family};
 
-/// (vid, pid) pairs for every Stream Dock SKU the app registers + drives via
-/// mirajazz. Queried at both observed vendor usage pages (0xFFA0 on the AKP05E
-/// demo; 0xFF00 in the opendeck consumers) since firmware varies.
-const KNOWN_VID_PIDS: &[(u16, u16)] = &[
-    // AKP05 / N4
-    (0x0300, 0x3004),
-    (0x0300, 0x5001),
-    (0x6603, 0x1007),
-    // AKP03 / N3
-    (0x0300, 0x3001),
-    (0x0300, 0x3002),
-    (0x0300, 0x1003),
-    (0x0300, 0x3003),
-    (0x6602, 0x1002),
-    (0x6602, 0x1003),
-    (0x6603, 0x1002),
-    (0x6603, 0x1003),
-    // AKP153
-    (0x0300, 0x1001),
-    (0x0300, 0x1002),
-    (0x5548, 0x6674),
-    (0x0300, 0x1010),
-    (0x0300, 0x1020),
-];
-
+/// Build the mirajazz enumeration queries from `kind::SKUS`.
+///
+/// Queried at both observed vendor usage pages (0xFFA0 on the AKP05E demo unit
+/// and in every opendeck consumer; 0xFF00 as a fallback) since firmware varies.
+///
+/// Derived from the SKU table rather than a second hand-maintained list: the
+/// two drifted before (the AKP05 Pro/retail PIDs landed in the parameter table
+/// but not the enumeration list, so those units were never opened at all).
 fn build_queries() -> Vec<DeviceQuery> {
-    let mut q = Vec::with_capacity(KNOWN_VID_PIDS.len() * 2);
-    for &(vid, pid) in KNOWN_VID_PIDS {
+    let mut q = Vec::new();
+    for (vid, pid) in known_vid_pids() {
         q.push(DeviceQuery::new(0xFFA0, 1, vid, pid));
         q.push(DeviceQuery::new(0xFF00, 1, vid, pid));
     }
     q
 }
 
-/// A connected device plus the family it was opened with (protocol version is
-/// only needed at connect time, so it is not retained here).
+/// Command-line configuration.
+struct Args {
+    /// Allow brightness/image commands (mirajazz `initialize()` sends `CRT DIS`).
+    allow_output: bool,
+    /// Diagnostic mode: dump every HID interface the host can see and exit.
+    list: bool,
+    /// Open only this (vid, pid). The app passes its own device's identity so
+    /// one sidecar instance never adopts a different Stream Dock's handle.
+    only: Option<(u16, u16)>,
+}
+
+/// Parse `0x1234` / `1234` (hex) or a decimal value.
+fn parse_id(raw: &str) -> Option<u16> {
+    let raw = raw.trim();
+    if let Some(hex) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
+        return u16::from_str_radix(hex, 16).ok();
+    }
+    u16::from_str_radix(raw, 16)
+        .ok()
+        .or_else(|| raw.parse().ok())
+}
+
+fn parse_args() -> Args {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut args = Args {
+        allow_output: false,
+        list: false,
+        only: None,
+    };
+    let (mut vid, mut pid) = (None, None);
+
+    let mut i = 0;
+    while i < argv.len() {
+        let a = argv[i].as_str();
+        // Accept both `--vid 0x0300` and `--vid=0x0300`.
+        let (key, inline) = match a.split_once('=') {
+            Some((k, v)) => (k, Some(v.to_string())),
+            None => (a, None),
+        };
+        let mut take_value = || -> Option<String> {
+            if let Some(v) = inline.clone() {
+                return Some(v);
+            }
+            i += 1;
+            argv.get(i).cloned()
+        };
+        match key {
+            "--allow-output" => args.allow_output = true,
+            "--list" => args.list = true,
+            "--vid" => vid = take_value().as_deref().and_then(parse_id),
+            "--pid" => pid = take_value().as_deref().and_then(parse_id),
+            _ => {}
+        }
+        i += 1;
+    }
+    if let (Some(v), Some(p)) = (vid, pid) {
+        args.only = Some((v, p));
+    }
+    args
+}
+
+/// Best-effort: report the OS device node behind `id` and whether this process
+/// can open it read-write.
+///
+/// `async_hid::DeviceId` is not re-exported by mirajazz and taking a direct
+/// dependency on async-hid pulls in a conflicting async runtime feature, so the
+/// path is recovered from the id's `Debug` form (`DevPath("/dev/hidrawN")` on
+/// Linux). This is diagnostic output only — nothing depends on it parsing.
+fn node_access(debug_id: &str) -> (Option<String>, Option<bool>) {
+    if !cfg!(target_os = "linux") {
+        return (None, None);
+    }
+    let Some(open) = debug_id.find('"') else {
+        return (None, None);
+    };
+    let rest = &debug_id[open + 1..];
+    let Some(close) = rest.find('"') else {
+        return (None, None);
+    };
+    let path = &rest[..close];
+    if !path.starts_with('/') {
+        return (None, None);
+    }
+    let writable = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .is_ok();
+    (Some(path.to_string()), Some(writable))
+}
+
+/// `--list`: dump every HID interface visible to this process, flagging the
+/// ones the sidecar recognises. This is the first thing to run when a device
+/// "does nothing": it distinguishes "not enumerated at all" (cable/kernel),
+/// "enumerated but unreadable" (missing udev `uaccess` rule) and "enumerated
+/// with a VID:PID we do not know" (catalogue gap).
+async fn list_all_hid() {
+    let backend = new_hid_backend();
+    let mut stream = match backend.enumerate().await {
+        Ok(s) => s,
+        Err(e) => {
+            emit(serde_json::json!({"event": "error", "msg": format!("enumerate: {e}")}));
+            return;
+        }
+    };
+    let mut count = 0usize;
+    while let Some(d) = stream.next().await {
+        count += 1;
+        let known = params_for(d.vendor_id, d.product_id);
+        let (node, writable) = node_access(&format!("{:?}", d.id));
+        emit(serde_json::json!({
+            "event": "hid",
+            "vid": format!("0x{:04x}", d.vendor_id),
+            "pid": format!("0x{:04x}", d.product_id),
+            "usage_page": format!("0x{:04x}", d.usage_page),
+            "usage_id": d.usage_id,
+            "name": d.name,
+            "manufacturer": d.manufacturer,
+            "serial": d.serial_number,
+            "known": known.is_some(),
+            "known_as": known.map(|p| p.human_name),
+            "protocol_version": known.map(|p| p.protocol_version),
+            "node": node,
+            // Linux only: false here on a `known` row means the udev rule is
+            // not applying its `uaccess` ACL, which is the single most common
+            // reason a Stream Dock enumerates but "does nothing".
+            "writable": writable,
+        }));
+    }
+    emit(serde_json::json!({"event": "list_done", "interface_count": count}));
+}
+
+/// A connected device plus the parameters it was opened with. The full params
+/// are retained (not just the family) because the key image format depends on
+/// the SKU's protocol version, not only on its family.
 struct DeviceEntry {
     device: Arc<Device>,
-    family: Family,
+    params: DeviceParams,
 }
 
 type DeviceMap = Arc<Mutex<HashMap<String, DeviceEntry>>>;
@@ -87,10 +204,25 @@ fn make_solid(w: u32, h: u32, r: u8, g: u8, b: u8) -> DynamicImage {
 
 #[tokio::main]
 async fn main() {
-    let allow_output = std::env::args().any(|a| a == "--allow-output");
+    let args = parse_args();
+    if args.list {
+        list_all_hid().await;
+        return;
+    }
+    let allow_output = args.allow_output;
     let devices: DeviceMap = Arc::new(Mutex::new(HashMap::new()));
 
-    let queries = build_queries();
+    let queries = match args.only {
+        // One sidecar per app-side device: query only that device's identity so
+        // the handle this process holds is unambiguously the caller's.
+        Some((vid, pid)) => {
+            vec![
+                DeviceQuery::new(0xFFA0, 1, vid, pid),
+                DeviceQuery::new(0xFF00, 1, vid, pid),
+            ]
+        }
+        None => build_queries(),
+    };
     let matched = match list_devices(&queries).await {
         Ok(set) => set,
         Err(e) => {
@@ -101,12 +233,22 @@ async fn main() {
 
     // One control interface per physical unit (usage_id 1).
     for dev in matched.into_iter().filter(|d| d.usage_id == 1) {
+        if let Some((vid, pid)) = args.only {
+            if dev.vendor_id != vid || dev.product_id != pid {
+                continue;
+            }
+        }
         let params = match params_for(dev.vendor_id, dev.product_id) {
             Some(p) => p,
             None => continue, // not a mirajazz-driven SKU
         };
-        match Device::connect(&dev, params.protocol_version, params.key_count, params.encoder_count)
-            .await
+        match Device::connect(
+            &dev,
+            params.protocol_version,
+            params.key_count,
+            params.encoder_count,
+        )
+        .await
         {
             Ok(device) => {
                 let device = Arc::new(device);
@@ -123,7 +265,10 @@ async fn main() {
 
                 spawn_input_reader(device.get_reader(noop_process), serial.clone());
 
-                devices.lock().await.insert(serial, DeviceEntry { device, family: params.family });
+                devices
+                    .lock()
+                    .await
+                    .insert(serial, DeviceEntry { device, params });
             }
             Err(e) => emit(serde_json::json!({"event": "error", "msg": format!("connect: {e}")})),
         }
@@ -219,7 +364,9 @@ async fn handle_set_brightness(devices: &DeviceMap, cmd: &serde_json::Value, all
     match device {
         Some(device) => match device.set_brightness(percent).await {
             Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"set_brightness"})),
-            Err(e) => emit(serde_json::json!({"event":"error","msg":format!("set_brightness: {e}")})),
+            Err(e) => {
+                emit(serde_json::json!({"event":"error","msg":format!("set_brightness: {e}")}))
+            }
         },
         None => emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")})),
     }
@@ -253,10 +400,17 @@ async fn handle_set_image(devices: &DeviceMap, cmd: &serde_json::Value, allow_ou
     }
     let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
     let key = cmd.get("key").and_then(|k| k.as_u64()).unwrap_or(0) as u8;
-    let touchzone = cmd.get("touchzone").and_then(|t| t.as_bool()).unwrap_or(false);
+    let touchzone = cmd
+        .get("touchzone")
+        .and_then(|t| t.as_bool())
+        .unwrap_or(false);
     let width = cmd.get("width").and_then(|w| w.as_u64()).unwrap_or(0) as u32;
     let height = cmd.get("height").and_then(|h| h.as_u64()).unwrap_or(0) as u32;
-    let rgba = match cmd.get("rgba_b64").and_then(|s| s.as_str()).map(|s| B64.decode(s)) {
+    let rgba = match cmd
+        .get("rgba_b64")
+        .and_then(|s| s.as_str())
+        .map(|s| B64.decode(s))
+    {
         Some(Ok(bytes)) => bytes,
         _ => {
             emit(serde_json::json!({"event": "error", "msg": "missing/invalid rgba_b64"}));
@@ -282,7 +436,7 @@ async fn handle_set_image(devices: &DeviceMap, cmd: &serde_json::Value, allow_ou
                 let fmt = if touchzone {
                     zone_image_format()
                 } else {
-                    key_image_format(e.family)
+                    key_image_format(&e.params)
                 };
                 (e.device.clone(), fmt)
             }
@@ -311,10 +465,10 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
         return;
     }
     let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
-    let (device, family, key_count) = {
+    let (device, params, key_count) = {
         let guard = devices.lock().await;
         match guard.get(serial) {
-            Some(e) => (e.device.clone(), e.family, e.device.key_count()),
+            Some(e) => (e.device.clone(), e.params, e.device.key_count()),
             None => {
                 emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")}));
                 return;
@@ -331,12 +485,17 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
                 200u8.wrapping_sub(key.wrapping_mul(13)),
             );
             // AKP05 indices 0..3 are encoder touch zones; other families have none.
-            let (fmt, dim) = if family == Family::Akp05 && key < 4 {
-                (zone_image_format(), 128u32)
+            let fmt = if params.family == Family::Akp05 && key < 4 {
+                zone_image_format()
             } else {
-                (key_image_format(family), 112u32)
+                key_image_format(&params)
             };
-            device.set_button_image(key, fmt, make_solid(dim, dim, r, g, b)).await?;
+            // Source the solid at the format's own size so no family renders a
+            // mis-sized probe (the AKP03 uploads 60x60 / 64x64, not 112x112).
+            let (w, h) = (fmt.size.0 as u32, fmt.size.1 as u32);
+            device
+                .set_button_image(key, fmt, make_solid(w, h, r, g, b))
+                .await?;
         }
         device.flush().await
     }

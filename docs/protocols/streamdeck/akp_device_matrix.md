@@ -155,6 +155,25 @@ v2, 1024 in v3. JPEG 60×60 `Rot0` (AKP03) or 64×64 `Rot90`
 (AKP03R rev. 2). 3 rotary encoders + 3 non-LCD side buttons exposed
 through the input report.
 
+> ⚠️ **Corrections applied to the implementation 2026-08-21** (this table is
+> the vendor-SDK transcription and is left as captured). Cross-checked against
+> `4ndv/opendeck-akp03` `mappings.rs`, which is the field-validated mirajazz
+> consumer for this family:
+>
+> - `0x0300:0x3002` is the **AKP03E rev. 2**, not the plain AKP03E. The plain
+>   AKP03E is `0x0300:0x1002` — a pair this table omits entirely and which the
+>   project had filed under AKP153E.
+> - Protocol version is per SKU: `0x3002`, `0x3003`, `0x6603:0x1002`,
+>   `0x6603:0x1003`, `0x1500:0x3001`, `0x0b00:0x1001`, `0x5548:0x1001` and
+>   `0x0200:0x2000` are **v3** (64×64 `Rot90`); the rest of the family is v2
+>   (60×60 `Rot0`).
+> - The "512-byte packets in v2" note above is wrong per mirajazz
+>   `Device::connect`, which uses 1024 for every protocol version ≥ 2; only v1
+>   is 512.
+> - `0x6603:0x1003` (`MBox-N3EN`) is listed as v2 below; it is v3 upstream.
+>
+> The authoritative per-SKU table now lives in `streamdock-host/src/kind.rs`.
+
 | Codename                                                | VID:PID                           | Model name              | Notes                                                                                                              |
 | ------------------------------------------------------- | --------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `AKP03`                                                 | `0x0300:0x1001`                   | AJAZZ AKP03             | Canonical per `[ajazz-sdk]`                                                                                        |

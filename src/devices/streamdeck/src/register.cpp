@@ -18,13 +18,12 @@
  *  details (geometry, features, edge cases) are documented in
  *  `docs/protocols/streamdeck/{akp153,akp03,akp05,akp815}.md`.
  *
- *  @note Pre-2026-05-14 the registry contained two USB pairs (`0x0300:0x1001`
- *        for AKP153 and `0x0300:0x3001` for AKP03) that conflict with the
- *        canonical mapping in `[ajazz-sdk]` (`0x5548:0x6674` for AKP153,
- *        `0x0300:0x1001` for AKP03). To avoid breaking deployments that
- *        already work against the legacy pairs we keep them registered
- *        **and** register the canonical ones in parallel; runtime
- *        enumeration picks the first match.
+ *  @note 2026-08-21: `0x0300:0x1001` and `0x0300:0x1002` were filed under
+ *        AKP153 here while all three catalogues above — and this repo's own
+ *        `akp03.md` — put them in the AKP03 family. They now register as
+ *        AKP03 / AKP03E. The one genuinely in-tree-only pair kept for
+ *        backwards compatibility is `0x0300:0x3001` (`akp03_legacy`), which
+ *        no upstream catalogue lists.
  */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
@@ -91,28 +90,52 @@ std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors() {
                                 .touchZoneCount = 4};
     };
 
-    // AKP153 family (15 keys, no encoders). 0x0300:0x1001 wins over AKP03.
-    out.push_back(akp153(0x0300, 0x1001, "AJAZZ AKP153 / Mirabox HSV293S", "akp153"));
-    out.push_back(akp153(0x0300, 0x1002, "AJAZZ AKP153E", "akp153e"));
-    out.push_back(akp153(0x5548, 0x6674, "AJAZZ AKP153 (Mirabox V1)", "akp153_v1"));
-    out.push_back(akp153(0x0300, 0x1010, "AJAZZ AKP153E (Mirabox V2)", "akp153e_v2"));
+    // NOTE on the AKP153 <-> AKP03 PID split (corrected 2026-08-21):
+    // `0x0300:0x1001` and `0x0300:0x1002` were registered here as AKP153 /
+    // AKP153E. They are not: both `4ndv/opendeck-akp03` and
+    // `4ndv/opendeck-akp153` place those PIDs in the AKP03 family, as does
+    // this repo's own RE (docs/protocols/streamdeck/akp03.md, "USB identifier
+    // map"). The mis-filing opened AKP03/AKP03E units as protocol-version-1
+    // devices, i.e. with 512-byte HID framing instead of 1024 -- the device
+    // enumerated and the UI listed it, but the firmware ignored every write
+    // and sent no input. The canonical AKP153 / AKP153E pairs (0x5548:0x6674
+    // and 0x0300:0x1010) were already registered in parallel, so no AKP153 SKU
+    // loses its descriptor here; it only loses two PIDs that were never its.
+
+    // AKP153 family (15 keys, no encoders), pv1.
+    out.push_back(akp153(0x5548, 0x6674, "AJAZZ AKP153", "akp153"));
+    out.push_back(akp153(0x5548, 0x6670, "Mirabox HSV293S", "hsv293s"));
+    out.push_back(akp153(0x0300, 0x1010, "AJAZZ AKP153E", "akp153e"));
     out.push_back(akp153(0x0300, 0x1020, "AJAZZ AKP153R", "akp153r"));
+
     // AKP03 / N3 family (6 LCD keys + 3 side buttons + 3 encoders).
-    out.push_back(akp03(0x0300, 0x3001, "AJAZZ AKP03 (legacy firmware)", "akp03_legacy"));
-    out.push_back(akp03(0x0300, 0x3002, "AJAZZ AKP03E", "akp03e"));
+    // Protocol version and image format are PER SKU, not per family -- the
+    // sidecar's kind.rs holds them; see the pv2/pv3 split there.
+    // pv2 (60x60 Rot0 keys):
+    out.push_back(akp03(0x0300, 0x1001, "AJAZZ AKP03", "akp03"));
+    out.push_back(akp03(0x0300, 0x1002, "AJAZZ AKP03E", "akp03e"));
     out.push_back(akp03(0x0300, 0x1003, "AJAZZ AKP03R", "akp03r"));
-    out.push_back(akp03(0x0300, 0x3003, "AJAZZ AKP03R rev. 2", "akp03r_rev2"));
+    out.push_back(akp03(0x6602, 0x1000, "Mirabox N3 (6602:1000)", "mirabox_n3_6602_1000"));
     out.push_back(akp03(0x6602, 0x1002, "Mirabox N3 (rev. 1)", "mirabox_n3"));
+    out.push_back(akp03(0x0300, 0x3001, "AJAZZ AKP03 (legacy firmware)", "akp03_legacy"));
     out.push_back(akp03(0x6602, 0x1003, "Mirabox N3E (rev. 1)", "mirabox_n3e"));
+    // pv3 (64x64 Rot90 keys):
+    out.push_back(akp03(0x0300, 0x3002, "AJAZZ AKP03E rev. 2", "akp03e_rev2"));
+    out.push_back(akp03(0x0300, 0x3003, "AJAZZ AKP03R rev. 2", "akp03r_rev2"));
     out.push_back(akp03(0x6603, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3"));
     out.push_back(akp03(0x6603, 0x1003, "Mirabox N3EN", "mirabox_n3en"));
-    // AKP05 / N4 family (10 keys + 4 encoders + 4 touch zones).
+    out.push_back(akp03(0x1500, 0x3001, "Soomfon Stream Controller SE", "soomfon_stc_se"));
+    out.push_back(akp03(0x0b00, 0x1001, "Mars Gaming MSD-TWO", "msd_two"));
+    out.push_back(akp03(0x5548, 0x1001, "TreasLin N3", "treaslin_n3"));
+    out.push_back(akp03(0x0200, 0x2000, "Redragon Skyrider SS-551", "redragon_ss551"));
+
+    // AKP05 / N4 family (10 keys + 4 encoders + 4 touch zones), pv3.
     out.push_back(akp05(0x0300, 0x5001, "AJAZZ AKP05 (provisional)", "akp05"));
     out.push_back(akp05(0x6603, 0x1007, "Mirabox N4 / AJAZZ AKP05 family", "mirabox_n4"));
     out.push_back(akp05(0x0300, 0x3004, "AJAZZ AKP05E (Stream Dock Plus)", "akp05e"));
     // Pro/retail AKP05 variants (issue #85; PIDs mirrored from the upstream
     // opendeck-akp05 mappings.rs, all protocol 3 with the AKP05E's image
-    // formats). PROVISIONAL until hardware-confirmed — but unlike the
+    // formats). PROVISIONAL until hardware-confirmed -- but unlike the
     // 0x3004 demo unit, retail units report working INPUT upstream.
     out.push_back(akp05(0x0300, 0x3013, "AJAZZ AKP05E Pro", "akp05e_pro"));
     out.push_back(akp05(0x0300, 0x3014, "AJAZZ AKP05CN Pro", "akp05cn_pro"));

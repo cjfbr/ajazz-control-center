@@ -28,8 +28,9 @@
  * test_streamdeck_register_geometry.cpp gives the app side in isolation, now spanning
  * the app<->sidecar boundary.
  *
- * Cross-check captured 2026-06-22 against streamdock-host/src/kind.rs::params_for
- * and src/main.rs::KNOWN_VID_PIDS (16 SKUs, 1:1 with register.cpp).
+ * Cross-check refreshed 2026-08-21 against streamdock-host/src/kind.rs::SKUS
+ * (25 SKUs, 1:1 with register.cpp). The sidecar now derives its enumeration
+ * list from that same table, so there is no separate KNOWN_VID_PIDS to drift.
  */
 #include "ajazz/core/device.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
@@ -52,28 +53,38 @@ struct SidecarContract {
 
 /// Mirror of streamdock-host/src/kind.rs::params_for, restricted to the fields the
 /// app descriptor must agree with. Edit IN LOCKSTEP with kind.rs.
-constexpr std::array<SidecarContract, 19> kSidecarContract = {{
+constexpr std::array<SidecarContract, 25> kSidecarContract = {{
     // --- AKP05 / N4 (pv3): 10 keys + 4 zones + 1 dead = 15 wire slots, 4 encoders.
     {0x0300, 0x3004, 15, 4, 1}, // Ajazz AKP05E (hardware-confirmed)
-    {0x0300, 0x5001, 15, 4, 1}, // Ajazz AKP05 (provisional)
-    {0x6603, 0x1007, 15, 4, 1}, // Mirabox N4
     {0x0300, 0x3013, 15, 4, 1}, // Ajazz AKP05E Pro (provisional, issue #85)
     {0x0300, 0x3014, 15, 4, 1}, // Ajazz AKP05CN Pro (provisional)
     {0x0300, 0x3006, 15, 4, 1}, // Ajazz AKP05 retail (provisional)
-    // --- AKP03 / N3 (pv2): 6 LCD keys + 3 side buttons = 9 wire slots, 3 encoders.
-    {0x0300, 0x3001, 9, 3, 3}, // Ajazz AKP03 (legacy)
-    {0x0300, 0x3002, 9, 3, 3}, // Ajazz AKP03E
+    {0x0300, 0x5001, 15, 4, 1}, // Ajazz AKP05 (provisional)
+    {0x6603, 0x1007, 15, 4, 1}, // Mirabox N4
+    // --- AKP03 / N3: 6 LCD keys + 3 plain buttons = 9 wire slots, 3 encoders.
+    // pv2 silicon (60x60 Rot0):
+    {0x0300, 0x1001, 9, 3, 3}, // Ajazz AKP03
+    {0x0300, 0x1002, 9, 3, 3}, // Ajazz AKP03E
     {0x0300, 0x1003, 9, 3, 3}, // Ajazz AKP03R
-    {0x0300, 0x3003, 9, 3, 3}, // Ajazz AKP03R (rev.2)
-    {0x6602, 0x1002, 9, 3, 3}, // Mirabox N3
-    {0x6602, 0x1003, 9, 3, 3}, // Mirabox N3E
-    {0x6603, 0x1002, 9, 3, 3}, // Mirabox N3 (rev.3)
+    {0x6602, 0x1000, 9, 3, 3}, // Mirabox N3 (6602:1000)
+    {0x6602, 0x1002, 9, 3, 3}, // Mirabox N3 (6602:1002)
+    {0x0300, 0x3001, 9, 3, 3}, // Ajazz AKP03 (legacy, in-tree only)
+    {0x6602, 0x1003, 9, 3, 3}, // Mirabox N3E (in-tree only)
+    // pv3 silicon (64x64 Rot90):
+    {0x0300, 0x3002, 9, 3, 3}, // Ajazz AKP03E rev. 2
+    {0x0300, 0x3003, 9, 3, 3}, // Ajazz AKP03R rev. 2
+    {0x6603, 0x1002, 9, 3, 3}, // Mirabox N3 (rev. 3)
     {0x6603, 0x1003, 9, 3, 3}, // Mirabox N3EN
+    {0x1500, 0x3001, 9, 3, 3}, // Soomfon Stream Controller SE
+    {0x0b00, 0x1001, 9, 3, 3}, // Mars Gaming MSD-TWO
+    {0x5548, 0x1001, 9, 3, 3}, // TreasLin N3
+    {0x0200, 0x2000, 9, 3, 3}, // Redragon Skyrider SS-551
     // --- AKP153 / HSV293S (pv1): 15 keys, no encoders, no strip.
-    {0x0300, 0x1001, 15, 0, 0}, // Ajazz AKP153
-    {0x0300, 0x1002, 15, 0, 0}, // Ajazz AKP153E
-    {0x5548, 0x6674, 15, 0, 0}, // Ajazz AKP153 (Mirabox V1)
-    {0x0300, 0x1010, 15, 0, 0}, // Ajazz AKP153E (V2)
+    // NOTE 0x0300:0x1001 and 0x0300:0x1002 are NOT here: they are AKP03 SKUs
+    // (above). See the register.cpp note dated 2026-08-21.
+    {0x5548, 0x6674, 15, 0, 0}, // Ajazz AKP153
+    {0x5548, 0x6670, 15, 0, 0}, // Mirabox HSV293S
+    {0x0300, 0x1010, 15, 0, 0}, // Ajazz AKP153E
     {0x0300, 0x1020, 15, 0, 0}, // Ajazz AKP153R
 }};
 
