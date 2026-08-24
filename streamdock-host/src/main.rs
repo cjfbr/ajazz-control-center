@@ -53,8 +53,16 @@ struct Args {
     /// one sidecar instance never adopts a different Stream Dock's handle.
     only: Option<(u16, u16)>,
     /// Diagnostic: emit EVERY frame the input endpoint delivers, unfiltered and
-    /// with a full hex dump, as `raw_frame` events. See `spawn_input_reader`.
+    /// with a full hex dump, as `raw_frame` events, plus reader liveness
+    /// heartbeats. See `spawn_input_reader`.
     raw_input: bool,
+    /// Diagnostic: read with no timeout instead of re-arming a 500 ms one.
+    ///
+    /// The timed read is re-issued on every expiry, so a frame that arrives
+    /// while the previous read is being cancelled could be lost. `cat
+    /// /dev/hidraw0` blocks indefinitely and does see frames, so if this mode
+    /// works where the default does not, the cancellation is the culprit.
+    blocking_input: bool,
 }
 
 /// Parse `0x1234` / `1234` (hex) or a decimal value.
@@ -75,6 +83,7 @@ fn parse_args() -> Args {
         list: false,
         only: None,
         raw_input: false,
+        blocking_input: false,
     };
     let (mut vid, mut pid) = (None, None);
 
@@ -97,8 +106,16 @@ fn parse_args() -> Args {
             "--allow-output" => args.allow_output = true,
             "--list" => args.list = true,
             "--raw-input" => args.raw_input = true,
+            "--blocking-input" => args.blocking_input = true,
             "--vid" => vid = take_value().as_deref().and_then(parse_id),
             "--pid" => pid = take_value().as_deref().and_then(parse_id),
+            // A silently ignored unknown flag makes a stale binary look like a
+            // new one that simply found nothing — which cost a debugging round.
+            other if other.starts_with("--") => {
+                emit(serde_json::json!({
+                    "event": "error", "msg": format!("unknown option: {other}"),
+                }));
+            }
             _ => {}
         }
         i += 1;
@@ -292,6 +309,7 @@ async fn main() {
                     device.get_reader(noop_process),
                     serial.clone(),
                     args.raw_input,
+                    args.blocking_input,
                 );
 
                 devices
@@ -381,13 +399,26 @@ fn spawn_input_reader(
     reader: Arc<mirajazz::state::DeviceStateReader>,
     serial: String,
     raw_input: bool,
+    blocking_input: bool,
 ) {
     tokio::spawn(async move {
+        if raw_input {
+            // Liveness marker: distinguishes "the reader never started" from
+            // "the reader is running and the device sends nothing".
+            emit(serde_json::json!({
+                "event": "reader_started", "serial": serial, "blocking": blocking_input,
+            }));
+        }
+        let mut timeouts: u64 = 0;
         loop {
-            match reader
-                .raw_read_data_with_timeout(512, Duration::from_millis(500))
-                .await
-            {
+            let read = if blocking_input {
+                reader.raw_read_data(512).await.map(Some)
+            } else {
+                reader
+                    .raw_read_data_with_timeout(512, Duration::from_millis(500))
+                    .await
+            };
+            match read {
                 Ok(Some(buf)) => {
                     if raw_input {
                         let hex: String = buf.iter().take(32).map(|b| format!("{b:02x}")).collect();
@@ -417,7 +448,19 @@ fn spawn_input_reader(
                         "raw": hex,
                     }));
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    timeouts += 1;
+                    // Heartbeat every ~5s of idling, so a silent device is
+                    // visibly distinct from a stalled reader.
+                    if raw_input && timeouts.is_multiple_of(10) {
+                        emit(serde_json::json!({
+                            "event": "read_status",
+                            "serial": serial,
+                            "timeouts": timeouts,
+                            "frames": 0,
+                        }));
+                    }
+                }
                 Err(e) => {
                     emit(serde_json::json!({
                         "event": "device_error", "serial": serial, "msg": format!("{e}"),
