@@ -77,15 +77,42 @@ install_deps_fedora() {
         cargo rust
 }
 
+# `apt-get install` aborts the WHOLE transaction on a single unknown package
+# name, and Qt's Debian packaging is renamed between releases (there is no
+# `qt6-quickcontrols2-dev` at all -- QuickControls2 ships inside
+# `qt6-declarative-dev` -- and `libqt6svg6-dev` became `qt6-svg-dev`). Listing
+# one stale name therefore installed NOTHING and left the tree unbuildable.
+# Partition the list into what this release actually has, install that, and
+# report the rest instead of failing.
+apt_install_available() {
+    local wanted=("$@") present=() missing=()
+    local pkg
+    for pkg in "${wanted[@]}"; do
+        if apt-cache show "$pkg" >/dev/null 2>&1; then
+            present+=("$pkg")
+        else
+            missing+=("$pkg")
+        fi
+    done
+    if ((${#missing[@]})); then
+        warn "not available on this release, skipping: ${missing[*]}"
+    fi
+    sudo_cmd apt-get install -y "${present[@]}"
+}
+
 install_deps_debian() {
     step "Installing build dependencies (Debian/Ubuntu)"
     sudo_cmd apt-get update -qq
-    sudo_cmd apt-get install -y \
+    apt_install_available \
         cmake ninja-build g++ git pkg-config \
-        qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
-        qt6-tools-dev libqt6svg6-dev \
+        qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+        qt6-svg-dev libqt6svg6-dev \
+        qt6-wayland-dev qt6-websockets-dev qt6-webengine-dev \
+        libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \
+        libxcb1-dev libxcb-cursor-dev \
+        libwayland-dev wayland-protocols libx11-dev \
         python3-dev python3-pip \
-        libudev-dev libsystemd-dev libusb-1.0-0-dev \
+        libudev-dev libsystemd-dev libusb-1.0-0-dev libhidapi-dev \
         clang-format clang-tidy \
         cargo rustc
 }

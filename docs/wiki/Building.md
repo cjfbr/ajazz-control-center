@@ -40,9 +40,13 @@ sudo dnf install -y cmake ninja-build gcc-c++ \
 **Debian / Ubuntu (24.04+):**
 
 ```bash
-sudo apt install -y cmake ninja-build g++ \
-    qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
-    python3-dev libudev-dev \
+sudo apt install -y cmake ninja-build g++ pkg-config \
+    qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-svg-dev \
+    qt6-wayland-dev qt6-websockets-dev qt6-webengine-dev \
+    libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \
+    libxcb1-dev libxcb-cursor-dev \
+    libwayland-dev wayland-protocols libx11-dev \
+    python3-dev libudev-dev libsystemd-dev libusb-1.0-0-dev \
     cargo rustc
 ```
 
@@ -52,6 +56,22 @@ sudo apt install -y cmake ninja-build g++ \
 brew install cmake ninja qt@6 python@3.11 rust
 export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
 ```
+
+Notes on the Debian/Ubuntu list:
+
+- There is **no** `qt6-quickcontrols2-dev` package — QuickControls2 ships
+  inside `qt6-declarative-dev`. Naming it aborts the whole `apt install`
+  transaction, which is why `make bootstrap` used to install nothing.
+- `qt6-wayland-dev` is **not optional on Linux**: `src/app/CMakeLists.txt`
+  does `find_package(Qt6 REQUIRED COMPONENTS WaylandClient)` for the
+  active-window watcher, so configure hard-fails without it — on X11 sessions
+  too, since the backend is chosen at runtime, not at build time.
+- `qt6-websockets-dev` and `qt6-webengine-dev` are probed with `QUIET`. Without
+  them the build still succeeds but silently drops the Elgato plugin host
+  (SdPluginServer) and the Property Inspector. Watch the configure output for
+  the `Qt6::WebSockets NOT found` / WebEngine lines.
+- The `libqt6svg6-dev` name was renamed to `qt6-svg-dev`; recent releases
+  accept the old name as a transitional alias.
 
 **Windows:** install Qt 6.7 via the
 [online installer](https://www.qt.io/download-qt-installer) and Visual
