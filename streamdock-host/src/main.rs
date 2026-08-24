@@ -52,6 +52,9 @@ struct Args {
     /// Open only this (vid, pid). The app passes its own device's identity so
     /// one sidecar instance never adopts a different Stream Dock's handle.
     only: Option<(u16, u16)>,
+    /// Diagnostic: emit EVERY frame the input endpoint delivers, unfiltered and
+    /// with a full hex dump, as `raw_frame` events. See `spawn_input_reader`.
+    raw_input: bool,
 }
 
 /// Parse `0x1234` / `1234` (hex) or a decimal value.
@@ -71,6 +74,7 @@ fn parse_args() -> Args {
         allow_output: false,
         list: false,
         only: None,
+        raw_input: false,
     };
     let (mut vid, mut pid) = (None, None);
 
@@ -92,6 +96,7 @@ fn parse_args() -> Args {
         match key {
             "--allow-output" => args.allow_output = true,
             "--list" => args.list = true,
+            "--raw-input" => args.raw_input = true,
             "--vid" => vid = take_value().as_deref().and_then(parse_id),
             "--pid" => pid = take_value().as_deref().and_then(parse_id),
             _ => {}
@@ -283,7 +288,11 @@ async fn main() {
                     "name": params.human_name,
                 }));
 
-                spawn_input_reader(device.get_reader(noop_process), serial.clone());
+                spawn_input_reader(
+                    device.get_reader(noop_process),
+                    serial.clone(),
+                    args.raw_input,
+                );
 
                 devices
                     .lock()
@@ -336,7 +345,26 @@ fn is_ack_frame(buf: &[u8]) -> bool {
 }
 
 /// Per-device input reader. Uses raw frames (no initialize/DIS).
-fn spawn_input_reader(reader: Arc<mirajazz::state::DeviceStateReader>, serial: String) {
+///
+/// The ACK filter below is contested and unresolved on hardware:
+///
+///   * this repo's RE (`akp05_input_corrections.md` §2, from the vendor DLL's
+///     `ACK..OK` classifier) says frames beginning `ACK` are command
+///     acknowledgements sharing the input channel, and must be discarded;
+///   * mirajazz's own `state.rs::read_input` says the opposite for every
+///     protocol version > 0 — a frame NOT beginning `ACK` is `NoData`, i.e. the
+///     input frames are exactly the ACK-prefixed ones. Both then read the code
+///     at byte 9 and the state at byte 10, so they agree on everything else.
+///
+/// If mirajazz is right, this filter drops every real event and the device
+/// looks dead — which is what an AKP03E (0x0300:0x3002) does here. `--raw-input`
+/// emits every frame unfiltered so the hardware can settle it instead of us
+/// picking a side.
+fn spawn_input_reader(
+    reader: Arc<mirajazz::state::DeviceStateReader>,
+    serial: String,
+    raw_input: bool,
+) {
     tokio::spawn(async move {
         loop {
             match reader
@@ -344,6 +372,18 @@ fn spawn_input_reader(reader: Arc<mirajazz::state::DeviceStateReader>, serial: S
                 .await
             {
                 Ok(Some(buf)) => {
+                    if raw_input {
+                        let hex: String = buf.iter().take(32).map(|b| format!("{b:02x}")).collect();
+                        emit(serde_json::json!({
+                            "event": "raw_frame",
+                            "serial": serial,
+                            "len": buf.len(),
+                            "starts_with_ack": is_ack_frame(&buf),
+                            "byte9": buf.get(9).copied(),
+                            "byte10": buf.get(10).copied(),
+                            "hex32": hex,
+                        }));
+                    }
                     // Discard "ACK..OK" acknowledgement frames: they ride the same
                     // input-report channel but are command acknowledgements, not
                     // input events. Emitting one as {code: buf[9]} would surface a
