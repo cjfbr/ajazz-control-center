@@ -12,14 +12,16 @@
 # Our customizations live OUTSIDE the submodule (the shim below + the C++
 # OpenDeckBridge/scheme-handler), so the submodule stays pristine and bumpable.
 #
-# Requires Node.js >= 22.18 + npm. Idempotent. See docs/opendeck-ui/.
+# Requires Node.js with TypeScript type stripping + npm. Idempotent.
+# See docs/opendeck-ui/.
 #
-# Why 22.18 and not the 20 this used to claim: the pinned submodule ships its
-# SvelteKit config as `svelte.config.ts`, and loading a TypeScript config needs
-# Node's type stripping, which is only on by default from 22.18.0 (and 23.6.0).
-# On anything older the build dies deep inside vite with
-# `ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`, which says nothing
-# about Node versions -- hence the explicit gate below.
+# The pinned submodule ships its SvelteKit config as `svelte.config.ts`, so the
+# toolchain has to be able to import a TypeScript module. Node strips types on
+# import from 22.18.0 by default -- but the version number is NOT a reliable
+# proxy: the type stripper is a bundled component some distributions drop, so a
+# Node that reports 22.22 can still fail. (Observed on Ubuntu 26.04: v22.22.1,
+# well past the floor, dying inside vite with `ERR_UNKNOWN_FILE_EXTENSION:
+# Unknown file extension ".ts"`.) Probe the capability instead.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,32 +29,45 @@ webui_dir="$repo_root/src/app/webui/opendeck"
 shim="$repo_root/resources/opendeck-shim/tauri-shim.js"
 out="$webui_dir/build"
 
-node_min="22.18.0"
-
 if ! command -v npm >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
-    echo "build-webui: node/npm not found — install Node.js >= $node_min to build the webui SPA." >&2
+    echo "build-webui: node/npm not found — install Node.js to build the webui SPA." >&2
     exit 2
 fi
 
-node_have="$(node --version | sed 's/^v//')"
-if [[ "$(printf '%s\n%s\n' "$node_min" "$node_have" | sort -V | head -n1)" != "$node_min" ]]; then
+# Capability probe: can this node import a .ts module at all?
+probe_dir="$(mktemp -d)"
+printf 'export const ok: number = 1;\n' >"$probe_dir/probe.ts"
+if ! node -e 'import(process.argv[1]).catch(() => process.exit(1))' \
+    "$probe_dir/probe.ts" >/dev/null 2>&1; then
+    rm -rf "$probe_dir"
     cat >&2 <<EOF
-build-webui: Node.js $node_have is too old — need >= $node_min.
+build-webui: this Node cannot import TypeScript modules.
+
+  node $(node --version), $(command -v node)
 
 The vendored OpenDeck submodule configures SvelteKit through svelte.config.ts.
-Loading a TypeScript config requires Node's type stripping, on by default only
-from 22.18.0. Older versions fail inside vite with:
+Without type stripping the build fails inside vite with:
     ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"
 
+Note the Node VERSION may look fine — type stripping is on by default from
+22.18.0, but some distribution builds ship without the type stripper, so a
+22.22 can fail here too. Reproduce the probe yourself with:
+
+    printf 'export const a: number = 1;\\n' > /tmp/probe.ts
+    node -e "import('/tmp/probe.ts').then(()=>console.log('ok')).catch(e=>console.log(e.code))"
+
 Fixes:
-  * install a current Node (nvm install --lts, or nodesource);
-  * if a conda/venv environment is active, it may be shadowing the system
-    node -- check with 'which -a node';
+  * install an upstream Node build rather than the distro package —
+    nvm (https://github.com/nvm-sh/nvm) or NodeSource both ship one;
+  * if a conda/venv environment is active it may be shadowing your node,
+    check with 'which -a node';
   * or configure with -DAJAZZ_BUILD_WEBUI=OFF to skip the SPA entirely (the
     app then falls back to the native qml UI).
 EOF
     exit 2
 fi
+rm -rf "$probe_dir"
+
 if [[ ! -f $shim ]]; then
     echo "build-webui: missing shim at $shim" >&2
     exit 1
