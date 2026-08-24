@@ -33,9 +33,27 @@ until a live `CRT VER` handshake corrected it (`akp05_vendor.md` §14.1). This
 physical hardware, not from the string. Always confirm the family before
 trusting a PID that reports this string.
 
-Still unconfirmed on this unit: the protocol version (registered as v3 per
-`opendeck-akp03`), the image format, and whether input reports are reachable —
-the `0x3004` sibling's firmware ships with the input path disabled.
+Confirmed on this unit since:
+
+- **Opens and responds** at protocol version 3 (`{"device_count":1}`, `pong`).
+
+- **Renders**: all six LCD keys paint from the sidecar's `render_test`.
+
+- **Input works** — unlike the `0x3004` AKP05E sibling, whose firmware ships
+  with the input path disabled. Raw `/dev/hidraw0` while pressing LCD key 1:
+
+  ```
+  4143 4b00 004f 4b00 0001 0100 0000 ...
+   A C  K  .  .  O  K  .  .   ^9   ^10
+  ```
+
+  Frame prefix `ACK\0\0OK\0\0`, code at byte 9, state at byte 10 — matching
+  the action-code table below. See `akp05_input_corrections.md` §2 for why the
+  ACK prefix must NOT be treated as a discard marker.
+
+Still unconfirmed: the per-key image format (64x64 `Rot90`, from
+`opendeck-akp03`) — the keys render, but nobody has yet checked the orientation
+or whether the image fills the key.
 
 ## Hardware
 

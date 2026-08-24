@@ -76,7 +76,37 @@ for touch; see below).
 
 ______________________________________________________________________
 
-## 2. Keys — **[CONFIRMED] keep as-is**
+## 2. Keys — **[CORRECTED 2026-08-24 by hardware]**
+
+> ⚠️ **The "discard ACK frames" verdict below is WRONG and cost this project a
+> total input outage.** Raw `/dev/hidraw0` capture from an AKP03E
+> (`0x0300:0x3002`, firmware `V3.AKP03E_PXL.02.010`) while pressing LCD key 1:
+>
+> ```
+> 4143 4b00 004f 4b00 0001 0100 0000 ...
+>  A C  K  .  .  O  K  .  .   ^9   ^10
+> ```
+>
+> **Every** input frame carries the `ACK\0\0OK\0\0` prefix. It is the wire
+> format, not an acknowledgement marker. `mirajazz`'s `state.rs::read_input`
+> had it right: for any protocol version > 0 it treats a frame that does NOT
+> start with those bytes as `NoData` — the ACK-prefixed frames are exactly the
+> input frames.
+>
+> Reading the vendor DLL's `ACK..OK` classifier as "discard these" made the
+> sidecar drop 100% of input: the device connected, held its handle, rendered
+> its keys and reported no press, ever. What separates a bare acknowledgement
+> from an event is a **zero code byte** — which is also the documented AKP03
+> idle/keep-alive frame (`akp03.md`, action code `0x00`).
+>
+> Correct predicate: `len >= 11 && frame[9] != 0`. Note `frame[10] == 0` is a
+> RELEASE, not an absent event, so only the code byte may gate. Implemented as
+> `is_event_frame` in `streamdock-host/src/main.rs`.
+>
+> Everything else here stands: code at `frame[9]`, press/release edge at
+> `frame[10]` — now confirmed on hardware rather than inferred.
+
+### Original (superseded) analysis
 
 ### Current code (correct)
 
