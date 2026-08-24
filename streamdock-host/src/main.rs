@@ -478,6 +478,26 @@ async fn handle_set_image(devices: &DeviceMap, cmd: &serde_json::Value, allow_ou
     }
 }
 
+/// Maximally distinct colours, one per surface index.
+///
+/// The point of `render_test` is to let a person read the wire-index ->
+/// physical-surface mapping straight off the panel, so the colours have to be
+/// unmistakable when named out loud. The previous linear ramp
+/// (`r = i*17, g = i*9+40, b = 200 - i*13`) failed at exactly that: every index
+/// an AKP03 can render (0..5) came out blue-dominant, and a user asked to read
+/// the mapping could only report "they all lit up blue".
+const RENDER_TEST_COLOURS: &[(&str, u8, u8, u8)] = &[
+    ("red", 255, 0, 0),
+    ("green", 0, 200, 0),
+    ("blue", 0, 80, 255),
+    ("yellow", 255, 220, 0),
+    ("magenta", 255, 0, 255),
+    ("cyan", 0, 230, 230),
+    ("white", 255, 255, 255),
+    ("orange", 255, 120, 0),
+    ("purple", 140, 0, 200),
+];
+
 /// `{"cmd":"render_test","serial":..}` — one-shot visual test, family-aware.
 async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_output: bool) {
     if !allow_output {
@@ -499,11 +519,7 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
     let r = async {
         device.set_brightness(60).await?;
         for key in 0u8..key_count as u8 {
-            let (r, g, b) = (
-                key.wrapping_mul(17),
-                key.wrapping_mul(9).wrapping_add(40),
-                200u8.wrapping_sub(key.wrapping_mul(13)),
-            );
+            let (_, r, g, b) = RENDER_TEST_COLOURS[key as usize % RENDER_TEST_COLOURS.len()];
             // AKP05 indices 0..3 are encoder touch zones; other families have none.
             let fmt = if params.family == Family::Akp05 && key < 4 {
                 zone_image_format()
@@ -521,7 +537,19 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
     }
     .await;
     match r {
-        Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"render_test","serial":serial})),
+        Ok(()) => {
+            // Emit the legend with the ack: reading the mapping off the panel
+            // means naming a colour, so the caller needs the index it maps to.
+            let legend: Vec<serde_json::Value> = (0..key_count)
+                .map(|k| {
+                    let (name, ..) = RENDER_TEST_COLOURS[k % RENDER_TEST_COLOURS.len()];
+                    serde_json::json!({"key": k, "colour": name})
+                })
+                .collect();
+            emit(serde_json::json!({
+                "event": "ok", "cmd": "render_test", "serial": serial, "legend": legend,
+            }));
+        }
         Err(e) => emit(serde_json::json!({"event":"error","msg":format!("render_test: {e}")})),
     }
 }
