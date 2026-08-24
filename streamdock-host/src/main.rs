@@ -109,8 +109,12 @@ fn parse_args() -> Args {
 ///
 /// `async_hid::DeviceId` is not re-exported by mirajazz and taking a direct
 /// dependency on async-hid pulls in a conflicting async runtime feature, so the
-/// path is recovered from the id's `Debug` form (`DevPath("/dev/hidrawN")` on
-/// Linux). This is diagnostic output only — nothing depends on it parsing.
+/// path is recovered from the id's `Debug` form. On Linux that is the **sysfs**
+/// path (`/sys/devices/.../hidraw/hidrawN`), NOT the device node — opening the
+/// sysfs directory read-write always fails, so testing it directly reported
+/// `writable: false` for every device on the bus and told the reader nothing.
+/// Map it to `/dev/hidrawN` first. Diagnostic output only; nothing depends on
+/// this parsing.
 fn node_access(debug_id: &str) -> (Option<String>, Option<bool>) {
     if !cfg!(target_os = "linux") {
         return (None, None);
@@ -126,12 +130,28 @@ fn node_access(debug_id: &str) -> (Option<String>, Option<bool>) {
     if !path.starts_with('/') {
         return (None, None);
     }
+    // sysfs path -> device node. The last component of the sysfs path is the
+    // hidraw name itself, so /dev/<basename> is the node.
+    let devnode = if path.starts_with("/sys/") {
+        match std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .filter(|n| n.starts_with("hidraw"))
+        {
+            Some(name) => format!("/dev/{name}"),
+            // Not a hidraw node: report the sysfs path, but do not pretend to
+            // know whether it is writable.
+            None => return (Some(path.to_string()), None),
+        }
+    } else {
+        path.to_string()
+    };
     let writable = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(path)
+        .open(&devnode)
         .is_ok();
-    (Some(path.to_string()), Some(writable))
+    (Some(devnode), Some(writable))
 }
 
 /// `--list`: dump every HID interface visible to this process, flagging the
