@@ -336,12 +336,29 @@ async fn main() {
     }
 }
 
-/// True if `buf` is an "ACK..OK" command-acknowledgement frame rather than an
-/// input report. ACK frames begin with the ASCII bytes `A` `C` `K` (0x41 0x43
-/// 0x4b) and share the input channel; they must not be decoded as input.
-/// See docs/protocols/streamdeck/akp05_input_corrections.md §2.1.
-fn is_ack_frame(buf: &[u8]) -> bool {
-    buf.len() >= 3 && buf[0] == 0x41 && buf[1] == 0x43 && buf[2] == 0x4b
+/// True if `buf` carries an actual input event rather than an idle frame.
+///
+/// HARDWARE-CONFIRMED 2026-08-24 on an AKP03E (0x0300:0x3002, firmware
+/// V3.AKP03E_PXL.02.010), raw read of /dev/hidraw0 while pressing key 1:
+///
+///     4143 4b00 004f 4b00 0001 0100 0000 ...
+///     A C  K  .  .  O  K  .  .  ^9   ^10
+///
+/// So EVERY frame carries the `ACK\0\0OK\0\0` prefix — it is the wire format,
+/// not an acknowledgement marker — and the event rides at byte 9 (code) and
+/// byte 10 (state), which is where mirajazz and this repo's RE always agreed
+/// the event was.
+///
+/// This settles the contradiction noted in `spawn_input_reader`. The previous
+/// filter discarded any ACK-prefixed frame on the authority of
+/// `akp05_input_corrections.md` §2, which read the vendor DLL's `ACK..OK`
+/// classifier as "discard these". That dropped 100% of input on this device:
+/// it connected, held its handle, rendered its keys, and reported no press
+/// ever. What actually separates a bare acknowledgement from an event is a
+/// ZERO code byte, which is also the idle/keep-alive frame the AKP03 emits
+/// (`akp03.md`, action code `0x00`).
+fn is_event_frame(buf: &[u8]) -> bool {
+    buf.len() >= 11 && buf[9] != 0
 }
 
 /// Per-device input reader. Uses raw frames (no initialize/DIS).
@@ -378,18 +395,17 @@ fn spawn_input_reader(
                             "event": "raw_frame",
                             "serial": serial,
                             "len": buf.len(),
-                            "starts_with_ack": is_ack_frame(&buf),
+                            "is_event": is_event_frame(&buf),
                             "byte9": buf.get(9).copied(),
                             "byte10": buf.get(10).copied(),
                             "hex32": hex,
                         }));
                     }
-                    // Discard "ACK..OK" acknowledgement frames: they ride the same
-                    // input-report channel but are command acknowledgements, not
-                    // input events. Emitting one as {code: buf[9]} would surface a
-                    // bogus key/encoder event. See
-                    // docs/protocols/streamdeck/akp05_input_corrections.md §2.1.
-                    if is_ack_frame(&buf) {
+                    // Idle / bare-acknowledgement frames carry a zero code byte;
+                    // forwarding one would surface a phantom key 0 on every
+                    // keep-alive tick. Everything else is a real event — see
+                    // is_event_frame for the hardware-confirmed layout.
+                    if !is_event_frame(&buf) {
                         continue;
                     }
                     let hex: String = buf.iter().take(16).map(|b| format!("{b:02x}")).collect();
@@ -596,20 +612,44 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
 
 #[cfg(test)]
 mod tests {
-    use super::is_ack_frame;
+    use super::is_event_frame;
+
+    /// Verbatim capture from an AKP03E (0x0300:0x3002, firmware
+    /// V3.AKP03E_PXL.02.010): raw /dev/hidraw0 read while pressing LCD key 1.
+    const KEY1_PRESS: [u8; 16] = [
+        0x41, 0x43, 0x4b, 0x00, 0x00, 0x4f, 0x4b, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+        0x00,
+    ];
 
     #[test]
-    fn ack_frame_is_detected_and_input_is_not() {
-        // "ACK" prefix (0x41 0x43 0x4b) -> acknowledgement, must be filtered.
-        assert!(is_ack_frame(b"ACK,OK\0\0\0\0\0\0"));
-        assert!(is_ack_frame(&[0x41, 0x43, 0x4b, 0x00]));
-        // A real input report (code at byte 9) must NOT be treated as ACK.
-        let mut input = [0u8; 16];
-        input[9] = 0x05; // key index 5
-        input[10] = 0x01; // pressed
-        assert!(!is_ack_frame(&input));
-        // Too-short / empty buffers are not ACK.
-        assert!(!is_ack_frame(&[0x41, 0x43]));
-        assert!(!is_ack_frame(&[]));
+    fn the_captured_key_press_is_an_event() {
+        // Regression: this exact frame was discarded for carrying the ACK
+        // prefix, which made every Stream Dock look like it had no input.
+        assert!(is_event_frame(&KEY1_PRESS));
+        assert_eq!(KEY1_PRESS[9], 1); // key index
+        assert_eq!(KEY1_PRESS[10], 1); // pressed
+    }
+
+    #[test]
+    fn idle_frames_carry_a_zero_code_and_are_dropped() {
+        // Same prefix, no event: the bare acknowledgement / keep-alive shape.
+        let mut idle = KEY1_PRESS;
+        idle[9] = 0;
+        idle[10] = 0;
+        assert!(!is_event_frame(&idle));
+    }
+
+    #[test]
+    fn release_edges_survive_a_zero_state() {
+        // state == 0 is a RELEASE, not an absent event — only the code byte decides.
+        let mut release = KEY1_PRESS;
+        release[10] = 0;
+        assert!(is_event_frame(&release));
+    }
+
+    #[test]
+    fn short_buffers_are_not_events() {
+        assert!(!is_event_frame(&[0x41, 0x43, 0x4b]));
+        assert!(!is_event_frame(&[]));
     }
 }
