@@ -78,8 +78,8 @@ ______________________________________________________________________
 
 ## 2. Keys — **[CORRECTED 2026-08-24 by hardware]**
 
-> ⚠️ **The "discard ACK frames" verdict below is WRONG and cost this project a
-> total input outage.** Raw `/dev/hidraw0` capture from an AKP03E
+> ⚠️ **The "discard ACK frames" verdict below is at best incomplete.** Raw
+> `/dev/hidraw0` capture from an AKP03E
 > (`0x0300:0x3002`, firmware `V3.AKP03E_PXL.02.010`) while pressing LCD key 1:
 >
 > ```
@@ -93,11 +93,17 @@ ______________________________________________________________________
 > start with those bytes as `NoData` — the ACK-prefixed frames are exactly the
 > input frames.
 >
-> Reading the vendor DLL's `ACK..OK` classifier as "discard these" made the
-> sidecar drop 100% of input: the device connected, held its handle, rendered
-> its keys and reported no press, ever. What separates a bare acknowledgement
-> from an event is a **zero code byte** — which is also the documented AKP03
-> idle/keep-alive frame (`akp03.md`, action code `0x00`).
+> Discarding every ACK-prefixed frame therefore cannot be right: it is the
+> complement of what mirajazz keeps. The predicate below gates on a **zero code
+> byte** instead — also the documented AKP03 idle/keep-alive frame (`akp03.md`,
+> action code `0x00`) — which is strictly more permissive than the old filter
+> and so cannot lose events the old one kept.
+>
+> **Caveat, recorded honestly:** the capture above is a single frame that has
+> never been reproduced, and a command acknowledgement would carry the same
+> prefix. It is good evidence for the frame LAYOUT and against a blanket ACK
+> discard; it is NOT proof that this unit's input path is live. That is still
+> open — see `akp03.md`.
 >
 > Correct predicate: `len >= 11 && frame[9] != 0`. Note `frame[10] == 0` is a
 > RELEASE, not an absent event, so only the code byte may gate. Implemented as

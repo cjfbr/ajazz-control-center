@@ -39,17 +39,21 @@ Confirmed on this unit since:
 
 - **Renders**: all six LCD keys paint from the sidecar's `render_test`.
 
-- **Input works** — unlike the `0x3004` AKP05E sibling, whose firmware ships
-  with the input path disabled. Raw `/dev/hidraw0` while pressing LCD key 1:
+- **Input: ONE unreproduced capture.** Raw `/dev/hidraw0` during a 15 s window
+  in which LCD keys were being pressed and no commands were being sent:
 
   ```
   4143 4b00 004f 4b00 0001 0100 0000 ...
    A C  K  .  .  O  K  .  .   ^9   ^10
   ```
 
-  Frame prefix `ACK\0\0OK\0\0`, code at byte 9, state at byte 10 — matching
-  the action-code table below. See `akp05_input_corrections.md` §2 for why the
-  ACK prefix must NOT be treated as a discard marker.
+  Byte 9 = `0x01`, byte 10 = `0x01` reads as "LCD key 1 pressed" against the
+  action-code table below. **Treat that reading as provisional**: it is a single
+  frame, and no key press has produced another since — not through the sidecar,
+  and not through a plain `cat` on the node. A command acknowledgement would
+  also carry the `ACK..OK` prefix, so the frame alone does not prove the input
+  path is live. What it does establish is the frame LAYOUT (prefix, then code at
+  9 and state at 10), which mirajazz and this repo's RE already agreed on.
 
 Still unconfirmed: the per-key image format (64x64 `Rot90`, from
 `opendeck-akp03`) — the keys render, but nobody has yet checked the orientation
