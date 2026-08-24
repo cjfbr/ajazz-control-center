@@ -316,6 +316,42 @@ async fn main() {
                     "name": params.human_name,
                 }));
 
+                // HARDWARE-CONFIRMED 2026-08-24 (AKP03E 0x0300:0x3002): the
+                // device sends NO input reports until it has been initialized.
+                // Reading a freshly-connected handle returns nothing forever —
+                // through the sidecar, a raw `cat` on the hidraw node, or the
+                // kernel's own evdev node. One output command flips it on, and
+                // every key, button and encoder then reports normally.
+                //
+                // That is why input looked dead: nothing in the connect path
+                // wrote to the device, and mirajazz's `initialize()` (CRT DIS +
+                // CRT LIG) is private — it runs only as a side effect of a
+                // public output call. `keep_alive()` is the cheapest one: it
+                // initializes and then sends CRT CONNECT, touching neither
+                // brightness nor the panel contents.
+                //
+                // Sending DIS once per handle is the pattern CLAUDE.md records
+                // as hardware-confirmed non-wedging for the persistent-handle
+                // sidecar; the wedge came from open/close churn, not from DIS
+                // itself.
+                if allow_output {
+                    match device.keep_alive().await {
+                        Ok(()) => emit(serde_json::json!({
+                            "event": "initialized", "serial": serial,
+                        })),
+                        Err(e) => emit(serde_json::json!({
+                            "event": "error",
+                            "msg": format!("initialize (input stays silent without it): {e}"),
+                        })),
+                    }
+                } else {
+                    emit(serde_json::json!({
+                        "event": "warning",
+                        "serial": serial,
+                        "msg": "no --allow-output: device not initialized, so it will send NO input",
+                    }));
+                }
+
                 spawn_input_reader(
                     device.get_reader(noop_process),
                     serial.clone(),

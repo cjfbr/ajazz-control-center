@@ -39,56 +39,41 @@ Confirmed on this unit since:
 
 - **Renders**: all six LCD keys paint from the sidecar's `render_test`.
 
-- **Input: UNREACHABLE.** See the proof chain below.
+- **Input works — but ONLY after the device is initialized.** A freshly
+  connected handle reports nothing at all: not through the sidecar (timed or
+  blocking reads), not through a raw `cat` on `/dev/hidraw0` or `/dev/hidraw1`,
+  and not through the kernel's own evdev node for the second interface. One
+  output command flips it on permanently for that handle. mirajazz's
+  `initialize()` (`CRT DIS` + `CRT LIG`) is private and runs only as a side
+  effect of a public output call, so the sidecar now issues `keep_alive()` at
+  connect — it initializes and sends `CRT CONNECT`, touching neither brightness
+  nor panel contents.
 
-- **Input: ONE unreproduced capture.** Raw `/dev/hidraw0` during a 15 s window
-  in which LCD keys were being pressed and no commands were being sent:
+  This cost most of a debugging session and produced a confidently wrong
+  conclusion ("input dead in firmware, like the 0x3004 sibling") that had to be
+  retracted. **Before declaring any Stream Dock's input unreachable, send one
+  output command first.**
 
-  ```
-  4143 4b00 004f 4b00 0001 0100 0000 ...
-   A C  K  .  .  O  K  .  .   ^9   ^10
-  ```
+### Confirmed input codes (2026-08-24)
 
-  Byte 9 = `0x01`, byte 10 = `0x01` reads as "LCD key 1 pressed" against the
-  action-code table below. **Treat that reading as provisional**: it is a single
-  frame, and no key press has produced another since — not through the sidecar,
-  and not through a plain `cat` on the node. A command acknowledgement would
-  also carry the `ACK..OK` prefix, so the frame alone does not prove the input
-  path is live. What it does establish is the frame LAYOUT (prefix, then code at
-  9 and state at 10), which mirajazz and this repo's RE already agreed on.
+Captured from this unit after initialization. Frame layout
+`ACK\0\0OK\0\0` then code at byte 9, state at byte 10 — 512-byte reports.
 
-### Input-unreachable proof chain (2026-08-24)
+| Code            | Control                    | State byte             |
+| --------------- | -------------------------- | ---------------------- |
+| `0x01`–`0x06`   | LCD keys 1-6               | `1` press, `0` release |
+| `0x25`          | plain button 7             | `1` press, `0` release |
+| `0x30`          | plain button 8             | `1` press, `0` release |
+| `0x31`          | plain button 9             | `1` press, `0` release |
+| `0x90` / `0x91` | encoder 0 (large) CCW / CW | always `0` — no edge   |
+| `0x50` / `0x51` | encoder 1 CCW / CW         | always `0` — no edge   |
+| `0x60` / `0x61` | encoder 2 CCW / CW         | always `0` — no edge   |
 
-Recorded so nobody re-runs it. Every path below was exercised on this unit
-while its LCD keys, plain buttons and encoders were being operated, with the
-device freshly replugged and nothing else holding it:
-
-1. **Sidecar, timed reads** (`--raw-input`): reader alive and heartbeating
-   (`read_status` climbing past 30 timeouts), zero frames.
-1. **Sidecar, blocking reads** (`--blocking-input`, no timeout — the exact
-   strategy `opendeck-akp03` uses successfully on retail units): nothing.
-1. **Raw `cat /dev/hidraw0`** on the vendor control interface (`1-1:1.0`,
-   usage page `0xFFA0`), as root: nothing.
-1. **Raw `cat /dev/hidraw1`** on the second interface (`1-1:1.1`, usage page
-   `0x0001` usage id 6 — the kernel binds it as a keyboard): nothing.
-1. **The kernel's own evdev node** for that interface,
-   `/dev/input/by-id/usb-HOTSPOTEKUSB_..._if01-event-kbd` -> `event3`, read
-   raw: nothing. `libinput debug-events` likewise.
-
-So the device declares a keyboard interface it never writes to, and a vendor
-interface it never writes to, while output works completely. **`usbmon` was NOT
-run** — `/sys/kernel/debug` returned `Operation not permitted` even as root,
-which is kernel lockdown (Secure Boot). The `0x3004` case was closed with
-usbmon showing the kernel arms endpoint `0x82` and the device declines to fill
-it; that last confirmation is missing here, so "the endpoint is never filled"
-is inferred from five userspace layers agreeing, not directly observed.
-
-**Two independent `HOTSPOTEKUSB HID DEMO` units now show the same shape**:
-`0x0300:0x3004` (AKP05E) and `0x0300:0x3002` (AKP03E). Output complete, input
-dead. Treat that product string as a marker for demo/engineering firmware with
-the input path disabled, and do not spend another session proving it per unit.
-The remaining avenues are the ones `akp05_input_corrections.md` §7 lists:
-Frida on the Windows vendor app, or a retail unit.
+Every code matches the table transcribed from `[opendeck-akp03]` below, so that
+transcription is now hardware-backed for this SKU. Two corrections to the prose
+further down: the plain buttons emit **both** edges here, not release-only, and
+`0x91` / the encoder-press codes (`0x33`/`0x34`/`0x35`) were simply not
+exercised in the capture rather than absent.
 
 Still unconfirmed: the per-key image format (64x64 `Rot90`, from
 `opendeck-akp03`) — the keys render, but nobody has yet checked the orientation

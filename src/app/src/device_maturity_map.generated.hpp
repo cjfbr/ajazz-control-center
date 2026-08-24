@@ -27,7 +27,7 @@ inline QHash<QString, QString> deviceMaturityByCodename() {
         {QStringLiteral("akp03"), QStringLiteral("functional")},
         {QStringLiteral("akp03_legacy"), QStringLiteral("functional")},
         {QStringLiteral("akp03e"), QStringLiteral("functional")},
-        {QStringLiteral("akp03e_rev2"), QStringLiteral("partial")},
+        {QStringLiteral("akp03e_rev2"), QStringLiteral("functional")},
         {QStringLiteral("akp03r"), QStringLiteral("functional")},
         {QStringLiteral("akp03r_rev2"), QStringLiteral("scaffolded")},
         {QStringLiteral("mirabox_n3"), QStringLiteral("partial")},

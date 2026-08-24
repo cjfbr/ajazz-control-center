@@ -113,8 +113,18 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
+- [ ] **Re-test the AKP05E (`0x0300:0x3004`) input path with initialization.**
+  Its "input unreachable" verdict (`akp05_input_corrections.md` §7.1) was
+  reached with five methods that all read a device nobody had initialized —
+  exactly the mistake that made the AKP03E look dead on 2026-08-24 until one
+  `keep_alive()` turned its input on. The AKP05E chain does include a usbmon
+  capture showing the endpoint never filled, which is bus-level and harder to
+  explain away, so this may well stand. Worth one run of the sidecar (which now
+  initializes at connect) before anyone spends another session on Frida.
+
 - [ ] **AKP03: the three non-LCD buttons are not bindable.** Hardware-confirmed
-  2026-08-24 on a `0x0300:0x3002` unit: 6 LCD keys + 3 rotary encoders + 3
+  2026-08-24 on a `0x0300:0x3002` unit (they emit `0x25`/`0x30`/`0x31` with
+  both press and release edges): 6 LCD keys + 3 rotary encoders + 3
   plain buttons below the grid. `mapAkp03Input` correctly decodes the plain
   buttons (`0x25`/`0x30`/`0x31`) and emits `KeyPressed` at 1-based indices
   7/8/9, which `StreamDockInputService` looks up as `Profile::keys[6..8]`. But
