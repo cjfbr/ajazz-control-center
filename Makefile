@@ -91,17 +91,18 @@ package: ## Build distribution packages for this platform
 install: release ## Install into /usr/local (Linux/macOS)
 	@cmake --install $(BUILD_DIR_RELEASE)
 	@if [ "$$(uname)" = "Linux" ]; then \
-	    sudo install -m 644 resources/linux/99-ajazz.rules /etc/udev/rules.d/ ; \
+	    sudo rm -f /etc/udev/rules.d/99-ajazz.rules ; \
+	    sudo install -m 644 resources/linux/70-ajazz.rules /etc/udev/rules.d/ ; \
 	    sudo udevadm control --reload-rules ; \
 	    sudo udevadm trigger ; \
-	    echo "udev rule installed — no logout required." ; \
+	    echo "udev rule installed — replug the device to pick up the ACL." ; \
 	fi
 
 uninstall: ## Remove files placed by `make install`
 	@if [ -f $(BUILD_DIR_RELEASE)/install_manifest.txt ]; then \
 	    xargs rm -fv < $(BUILD_DIR_RELEASE)/install_manifest.txt ; \
 	fi
-	@sudo rm -f /etc/udev/rules.d/99-ajazz.rules 2>/dev/null || true
+	@sudo rm -f /etc/udev/rules.d/70-ajazz.rules /etc/udev/rules.d/99-ajazz.rules 2>/dev/null || true
 
 clean: ## Delete every build directory
 	@rm -rf build
@@ -151,10 +152,15 @@ docs-check: ## Fail if README or wiki AUTOGEN blocks are out of date (CI mode)
 	@python3 scripts/generate-docs.py --check
 
 udev: ## (Linux) (re)install the udev rule without a full install
-	@sudo install -m 644 resources/linux/99-ajazz.rules /etc/udev/rules.d/
+	@# Drop the pre-2026 name first: 99- sorts AFTER the stock 73-seat-late.rules
+	@# that applies the uaccess ACL, so a leftover copy is inert but confusing.
+	@sudo rm -f /etc/udev/rules.d/99-ajazz.rules
+	@sudo install -m 644 resources/linux/70-ajazz.rules /etc/udev/rules.d/
 	@sudo udevadm control --reload-rules
 	@sudo udevadm trigger
 	@echo "udev rule installed."
+	@echo "Now REPLUG the device: on systemd >= 258 the uaccess ACL is only"
+	@echo "applied on a real physical replug or at boot, never on udevadm trigger."
 
 doctor: ## Diagnose your environment: toolchain, Qt, Python, devices
 	@bash scripts/doctor.sh
