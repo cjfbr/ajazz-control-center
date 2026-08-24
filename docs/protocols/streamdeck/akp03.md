@@ -39,6 +39,8 @@ Confirmed on this unit since:
 
 - **Renders**: all six LCD keys paint from the sidecar's `render_test`.
 
+- **Input: UNREACHABLE.** See the proof chain below.
+
 - **Input: ONE unreproduced capture.** Raw `/dev/hidraw0` during a 15 s window
   in which LCD keys were being pressed and no commands were being sent:
 
@@ -54,6 +56,39 @@ Confirmed on this unit since:
   also carry the `ACK..OK` prefix, so the frame alone does not prove the input
   path is live. What it does establish is the frame LAYOUT (prefix, then code at
   9 and state at 10), which mirajazz and this repo's RE already agreed on.
+
+### Input-unreachable proof chain (2026-08-24)
+
+Recorded so nobody re-runs it. Every path below was exercised on this unit
+while its LCD keys, plain buttons and encoders were being operated, with the
+device freshly replugged and nothing else holding it:
+
+1. **Sidecar, timed reads** (`--raw-input`): reader alive and heartbeating
+   (`read_status` climbing past 30 timeouts), zero frames.
+1. **Sidecar, blocking reads** (`--blocking-input`, no timeout — the exact
+   strategy `opendeck-akp03` uses successfully on retail units): nothing.
+1. **Raw `cat /dev/hidraw0`** on the vendor control interface (`1-1:1.0`,
+   usage page `0xFFA0`), as root: nothing.
+1. **Raw `cat /dev/hidraw1`** on the second interface (`1-1:1.1`, usage page
+   `0x0001` usage id 6 — the kernel binds it as a keyboard): nothing.
+1. **The kernel's own evdev node** for that interface,
+   `/dev/input/by-id/usb-HOTSPOTEKUSB_..._if01-event-kbd` -> `event3`, read
+   raw: nothing. `libinput debug-events` likewise.
+
+So the device declares a keyboard interface it never writes to, and a vendor
+interface it never writes to, while output works completely. **`usbmon` was NOT
+run** — `/sys/kernel/debug` returned `Operation not permitted` even as root,
+which is kernel lockdown (Secure Boot). The `0x3004` case was closed with
+usbmon showing the kernel arms endpoint `0x82` and the device declines to fill
+it; that last confirmation is missing here, so "the endpoint is never filled"
+is inferred from five userspace layers agreeing, not directly observed.
+
+**Two independent `HOTSPOTEKUSB HID DEMO` units now show the same shape**:
+`0x0300:0x3004` (AKP05E) and `0x0300:0x3002` (AKP03E). Output complete, input
+dead. Treat that product string as a marker for demo/engineering firmware with
+the input path disabled, and do not spend another session proving it per unit.
+The remaining avenues are the ones `akp05_input_corrections.md` §7 lists:
+Frida on the Windows vendor app, or a retail unit.
 
 Still unconfirmed: the per-key image format (64x64 `Rot90`, from
 `opendeck-akp03`) — the keys render, but nobody has yet checked the orientation

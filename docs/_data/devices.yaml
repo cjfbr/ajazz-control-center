@@ -179,10 +179,10 @@ devices:
     pid: "0x3002"
     keys: 6
     encoders: 3
-    maturity: functional
+    maturity: partial
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Second-revision AKP03E silicon. Per opendeck-akp03 this is a protocol_version 3 device (both press and release edges) with 64x64 (Rot90) keys, not the 60x60 (Rot0) of the original. Carried the `akp03e` codename and protocol_version 2 until 2026-08-21. HARDWARE-SEEN 2026-08-24: a unit reporting `HOTSPOTEKUSB HOTSPOTEKUSB HID DEMO` on usage page 0xFFA0/1, owner-confirmed 6 LCD keys — the same white-label string as the 0x3004 AKP05E, so the string does not identify the family (see akp03.md)."
+    notes: "Second-revision AKP03E silicon. Per opendeck-akp03 this is a protocol_version 3 device (both press and release edges) with 64x64 (Rot90) keys, not the 60x60 (Rot0) of the original. Carried the `akp03e` codename and protocol_version 2 until 2026-08-21. HARDWARE 2026-08-24 (firmware V3.AKP03E_PXL.02.010, serial 81D0DA78283D, `HOTSPOTEKUSB HOTSPOTEKUSB HID DEMO`, owner-confirmed 6 LCD keys + 3 encoders + 3 plain buttons): opens at protocol_version 3, reports firmware, renders all six LCD keys, brightness live. Input UNREACHABLE -> maturity 'partial', mirroring the 0x3004 AKP05E demo unit. Note the white-label string does not identify the family (0x3004 carries it too and is a 10-key AKP05E); this unit was identified from the hardware. See akp03.md for the proof chain."
 
   - codename: akp03r
     family: streamdeck
