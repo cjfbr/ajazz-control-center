@@ -94,6 +94,42 @@ If the panel renders but the wrong key lights up, or a knob moves the wrong
 control, that is a mapping bug rather than a connection bug — include the
 `input:` log lines and the device's `VID:PID`.
 
+## Volume / media keys / hotkeys do nothing (Linux)
+
+The device registers the press — you can see it in the log — and the binding
+runs, but nothing happens on the system. Every action that "presses a key"
+(Volume, Media Control, Hotkey, typed text) goes through `/dev/uinput`, which is
+root-only by default.
+
+```bash
+ls -l /dev/uinput
+```
+
+`crw------- root root` means the app cannot open it. Fix and re-login:
+
+```bash
+make udev          # ships the uinput rule since 2026-08-24
+sudo modprobe uinput
+```
+
+After re-login the node should show a `+` (an ACL granting you access):
+
+```bash
+ls -l /dev/uinput          # crw-rw----+
+getfacl /dev/uinput | grep "^user:"
+```
+
+Confirm the app agrees — this line in the log means it is still failing:
+
+```bash
+acc --log-level=debug 2>&1 | grep uinput
+# UinputSynthesizer: open /dev/uinput failed (Permission denied). ...
+```
+
+If `/dev/uinput` does not exist at all, the kernel module is not loaded;
+`sudo modprobe uinput` loads it, and the shipped rule creates the node with the
+right permissions at boot from then on.
+
 ## Windows: device is detected but no input / no display
 
 - Exit the AJAZZ vendor app completely (check the system tray).

@@ -171,11 +171,15 @@ public:
     UinputSynthesizer() {
         fd_ = ::open("/dev/uinput", O_WRONLY | O_NONBLOCK);
         if (fd_ < 0) {
+            // Be specific: this failure makes every synthesized-input action
+            // (volume, media keys, hotkeys, typed text) a silent no-op, and
+            // the cause is almost always that /dev/uinput is root-only.
             AJAZZ_LOG_WARN("input_synth",
-                           "UinputSynthesizer: open /dev/uinput failed ({}); "
-                           "OUTPUT methods will return false. "
-                           "Add udev rule 70-ajazz.rules for unprivileged access "
-                           "(Phase-25 operator concern).",
+                           "UinputSynthesizer: open /dev/uinput failed ({}). "
+                           "Volume, media-key, hotkey and text actions will do "
+                           "NOTHING. Install resources/linux/70-ajazz.rules "
+                           "(`make udev`), which grants the logged-in user "
+                           "access, then re-login or `sudo modprobe uinput`.",
                            std::strerror(errno));
             return;
         }

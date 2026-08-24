@@ -76,6 +76,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Volume, media keys, hotkeys and typed text did nothing on Linux** (2026-08-24, user
+  report): every synthesized-input action goes through `/dev/uinput`, which is root-only by
+  default, so `UinputSynthesizer` failed to open at construction and each action became a silent
+  no-op — the key press registered, the binding ran, and no volume changed. Its own error message
+  told users to "add udev rule 70-ajazz.rules", but that file had never contained a uinput rule.
+  It does now (`TAG+="uaccess"` plus `static_node=uinput` so the node exists with the right
+  permissions before the module loads), the warning names the affected actions and the remedy, and
+  the Troubleshooting page has a section for it. Note the grant is broader than the per-device
+  hidraw rules — it lets the logged-in user synthesize input session-wide — so it is called out in
+  the rules file and can be removed by anyone who does not want it.
 - **AJAZZ AKP03 / AKP03E did nothing when plugged in on Linux** (2026-08-21, user report). Four
   independent defects, each on its own sufficient to make the device enumerate, appear in the
   sidebar and then respond to nothing:

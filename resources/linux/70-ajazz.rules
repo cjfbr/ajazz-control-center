@@ -57,6 +57,32 @@ KERNEL=="hidraw*", ATTRS{idVendor}=="0b00", ATTRS{idProduct}=="1001", MODE="0660
 KERNEL=="hidraw*", ATTRS{idVendor}=="0200", ATTRS{idProduct}=="2000", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
+# /dev/uinput — synthesized input (volume, media keys, hotkeys, typed text)
+# ---------------------------------------------------------------------------
+# Every action that "presses a key" goes through the uinput backend in
+# src/core/src/input_synthesizer_linux.cpp — uinput rather than XTest, because
+# it is kernel-native and therefore works under Wayland. `/dev/uinput` is
+# root-only by default, so without this rule the synthesizer fails to open at
+# construction and EVERY such action silently does nothing: the app registers
+# the key press, logs it, runs the binding, and no volume changes.
+#
+# That is exactly what happened until 2026-08-24. The synthesizer's own error
+# message told users to "add udev rule 70-ajazz.rules" — this file — which had
+# never contained a uinput rule at all.
+#
+# SECURITY: this grants the logged-in user write access to /dev/uinput, i.e.
+# the ability to synthesize arbitrary keyboard and pointer input for the whole
+# session. That capability is inherent to the feature (a macro pad that types
+# needs it), and it is the same grant ydotool, Solaar and similar tools ask
+# for — but it IS broader than the per-device hidraw rules above, so it is
+# called out here rather than buried. Delete this stanza if you do not want
+# synthesized input; the app degrades to logging a warning per action.
+#
+# static_node= makes udev create the node with these permissions at boot even
+# before the uinput module is loaded (opening it autoloads the module).
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+
+# ---------------------------------------------------------------------------
 # VIA-compatible AJAZZ keyboards (SONiX vendor prefix 0x3151)
 # ---------------------------------------------------------------------------
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
