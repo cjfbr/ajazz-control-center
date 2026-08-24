@@ -11,6 +11,32 @@
 > `streamdock-host/src/kind.rs`; the input code table below is implemented in
 > `src/app/src/sidecar_stream_dock_device.cpp::mapAkp03Input`.
 
+## Hardware confirmation (2026-08-24)
+
+First physical AKP03-family unit seen by this project — everything below had
+been transcribed from third-party catalogues until now.
+
+| Field               | Observed                                      |
+| ------------------- | --------------------------------------------- |
+| USB                 | `0x0300:0x3002`                               |
+| Product string      | `HOTSPOTEKUSB HOTSPOTEKUSB HID DEMO`          |
+| Manufacturer string | `HOTSPOTEKUSB`                                |
+| Control interface   | usage page `0xFFA0`, usage id `1` (`1-1:1.0`) |
+| Second interface    | usage page `0x0001`, usage id `6` (`1-1:1.1`) |
+| LCD keys            | **6** — confirmed by the owner, visually      |
+
+⚠️ **The `HOTSPOTEKUSB HID DEMO` product string does NOT identify the family.**
+The `0x0300:0x3004` unit carries the same white-label string and is an
+**AKP05E** (10 keys + touch strip) — it sat mis-filed as a 6-key AKP03 here
+until a live `CRT VER` handshake corrected it (`akp05_vendor.md` §14.1). This
+`0x3002` unit really is a 6-LCD-key AKP03, but that was established from the
+physical hardware, not from the string. Always confirm the family before
+trusting a PID that reports this string.
+
+Still unconfirmed on this unit: the protocol version (registered as v3 per
+`opendeck-akp03`), the image format, and whether input reports are reachable —
+the `0x3004` sibling's firmware ships with the input path disabled.
+
 ## Hardware
 
 **Sources:** `[mirabox-n3]` `[ajazz-sdk]` `[opendeck-akp03]` `[companion]` — see

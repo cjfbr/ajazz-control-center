@@ -182,7 +182,7 @@ devices:
     maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Second-revision AKP03E silicon. Per opendeck-akp03 this is a protocol_version 3 device (both press and release edges) with 64x64 (Rot90) keys, not the 60x60 (Rot0) of the original. Carried the `akp03e` codename and protocol_version 2 until 2026-08-21."
+    notes: "Second-revision AKP03E silicon. Per opendeck-akp03 this is a protocol_version 3 device (both press and release edges) with 64x64 (Rot90) keys, not the 60x60 (Rot0) of the original. Carried the `akp03e` codename and protocol_version 2 until 2026-08-21. HARDWARE-SEEN 2026-08-24: a unit reporting `HOTSPOTEKUSB HOTSPOTEKUSB HID DEMO` on usage page 0xFFA0/1, owner-confirmed 6 LCD keys — the same white-label string as the 0x3004 AKP05E, so the string does not identify the family (see akp03.md)."
 
   - codename: akp03r
     family: streamdeck
