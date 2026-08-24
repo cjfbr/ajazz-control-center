@@ -70,6 +70,9 @@ The dials render in a column to the right of the key grid rather than stacked
 underneath (`patches/opendeck/0001-device-layout-fidelity.patch`), matching
 where they sit on the hardware.
 
+Owner-confirmed on the `0x0300:0x3002` unit (2026-08-24): all nine buttons and
+all three dials are visible and bindable in the editor.
+
 ### Confirmed input codes (2026-08-24)
 
 Captured from this unit after initialization. Frame layout
