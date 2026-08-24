@@ -113,6 +113,20 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
+- [ ] **Implement the device-driver inbound half of the plugin protocol.**
+  `elgato_plugin_protocol.md` §4 lists what a device-support plugin sends:
+  `registerDevice`, `deregisterDevice`, `keyDown`/`keyUp`, `encoderChange`
+  (→ outbound `dialRotate`), `encoderDown`/`encoderUp`, `rerenderImages`,
+  `deviceBrightness`. `SdPluginServer` handles none of them — they fall through
+  to the forward-compat trace. Surfaced 2026-08-24 by a user who had installed
+  `st.lynx.plugins.opendeck-akp03` (upstream's AKP03 device driver, `Actions: []`):
+  turning a dial logged `unhandled event 'encoderChange'` and nothing else.
+  Note this overlaps with our own sidecar, which drives those SKUs natively — so
+  decide the policy first (accept such plugins as an alternative backend, or
+  detect and refuse a device-support plugin for a SKU we already drive) before
+  implementing the events. Two owners of one hidraw handle is the failure mode
+  to design against.
+
 - [ ] **Re-test the AKP05E (`0x0300:0x3004`) input path with initialization.**
   Its "input unreachable" verdict (`akp05_input_corrections.md` §7.1) was
   reached with five methods that all read a device nobody had initialized —
