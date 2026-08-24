@@ -14,6 +14,7 @@ This page is a condensed walkthrough.
 | Qt            | 6.7                            | `Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `Widgets` |
 | Python        | 3.11 (runtime only)            | system `python3` invoked by the OOP plugin host at runtime |
 | Rust / cargo  | current stable                 | **required for Stream Docks** — see below                  |
+| Node.js       | 22.18                          | builds the embedded OpenDeck SPA (`AJAZZ_BUILD_WEBUI=ON`)  |
 | libusb/hidapi | bundled via FetchContent       | no system install needed                                   |
 
 > **Rust is not optional if you own a Stream Dock.** The AKP03 / AKP05 /
@@ -80,6 +81,15 @@ Notes on the Debian/Ubuntu list:
   the `Qt6::WebSockets NOT found` / WebEngine lines.
 - The `libqt6svg6-dev` name was renamed to `qt6-svg-dev`; recent releases
   accept the old name as a transitional alias.
+
+Node.js 22.18 is a hard floor, not the "20" older docs claimed: the vendored
+OpenDeck submodule configures SvelteKit through `svelte.config.ts`, and loading
+a TypeScript config needs Node's type stripping, on by default only from
+22.18.0. On an older Node the build fails inside vite with
+`ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension ".ts"`. Watch out for an
+active conda/venv shadowing the system node (`which -a node`). To build without
+the SPA, configure with `-DAJAZZ_BUILD_WEBUI=OFF`; the app then falls back to
+the native QML UI.
 
 **Windows:** install Qt 6.7 via the
 [online installer](https://www.qt.io/download-qt-installer) and Visual

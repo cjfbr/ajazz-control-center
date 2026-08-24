@@ -45,8 +45,7 @@ endif()
 # (src/app/webui/opendeck) + injects the Tauri-compat shim, and the static SPA is bundled into the
 # :/opendeck Qt resource. WebUiHost.qml then loads it. See docs/opendeck-ui/.
 option(AJAZZ_BUILD_WEBUI
-       "Embed the OpenDeck web UI (webui mode, the default); needs Node.js, else falls back to qml."
-       ON
+       "Embed the OpenDeck web UI (webui mode, the default); needs Node.js >= 22.18, else qml." ON
 )
 
 qt_add_executable(
@@ -740,7 +739,7 @@ if(AJAZZ_BUILD_WEBUI)
         elseif(NOT AJAZZ_NPM_EXECUTABLE)
             message(
                 WARNING
-                    "AJAZZ_BUILD_WEBUI=ON but npm/Node.js (>= 20) was not found. "
+                    "AJAZZ_BUILD_WEBUI=ON but npm/Node.js (>= 22.18) was not found. "
                     "Skipping the OpenDeck SPA bundle; the app falls back to the native qml UI. "
                     "Install Node.js to embed the OpenDeck web UI."
             )
