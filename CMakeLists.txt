@@ -85,33 +85,84 @@ find_package(
 # does. Private headers are header-only / inlined into libQt6Core, so no extra link target is
 # required.
 find_package(Qt6 QUIET COMPONENTS CorePrivate)
-if(NOT TARGET Qt6::CorePrivate)
-    get_target_property(_qt6_core_includes Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
-    if(NOT _qt6_core_includes)
-        message(FATAL_ERROR "Qt6::Core has no INTERFACE_INCLUDE_DIRECTORIES — cannot "
-                            "synthesize Qt6::CorePrivate fallback. Check Qt install."
-        )
+
+# Locate the private header root ourselves. This is needed in BOTH failure modes:
+#
+# - config absent, headers present (aqtinstall / CI) — synthesize the target;
+# - config present, headers absent (Debian/Ubuntu) — repair or diagnose it.
+#
+# The second case is the nastier one. Debian splits the module: `qt6-base-dev` ships
+# Qt6CorePrivateConfig.cmake while the headers live in the separate `qt6-base-private-dev`. With
+# only the former installed, find_package SUCCEEDS, the synthesis branch below is skipped, and the
+# build dies much later at generate time with `Imported target "Qt6::CorePrivate" includes
+# non-existent path` — naming no package and no remedy.
+get_target_property(_qt6_core_includes Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
+if(NOT _qt6_core_includes)
+    message(FATAL_ERROR "Qt6::Core has no INTERFACE_INCLUDE_DIRECTORIES — cannot "
+                        "locate Qt6 private headers. Check your Qt install."
+    )
+endif()
+# The private header subtree is laid out as `<include>/QtCore/<ver>` and
+# `<include>/QtCore/<ver>/QtCore`. The first directory contains the version-stamped headers used
+# internally; the second is what `#include <private/qzipreader_p.h>` actually resolves through.
+set(_qt6_core_include_root "")
+foreach(inc IN LISTS _qt6_core_includes)
+    if(EXISTS "${inc}/QtCore/${Qt6_VERSION}/QtCore/private/qzipreader_p.h")
+        set(_qt6_core_include_root "${inc}")
+        break()
     endif()
-    # Qt6_VERSION is set by find_package(Qt6) above. The private header subtree is laid out as
-    # `<include>/QtCore/<ver>` and `<include>/QtCore/<ver>/QtCore`. The first directory contains the
-    # version-stamped headers used internally; the second is what `#include
-    # <private/qzipreader_p.h>` actually resolves through.
-    set(_qt6_core_include_root "")
-    foreach(inc IN LISTS _qt6_core_includes)
-        if(EXISTS "${inc}/QtCore/${Qt6_VERSION}/QtCore/private/qzipreader_p.h")
-            set(_qt6_core_include_root "${inc}")
+endforeach()
+
+# Shared remedy text: the one thing a person hitting either failure needs.
+set(_qt6_priv_hint
+    "Qt6 private headers (QtCore/${Qt6_VERSION}/QtCore/private/qzipreader_p.h) "
+    "are not installed. They are REQUIRED: PluginCatalogModel uses QZipReader to "
+    "extract .sdPlugin archives. Install them:\n"
+    "  Debian/Ubuntu : sudo apt install qt6-base-private-dev\n"
+    "  Fedora/RHEL   : sudo dnf install qt6-qtbase-private-devel\n"
+    "  Arch          : already in qt6-base\n"
+    "  Qt installer  : add qt.qt6.<ver>.qtbase via MaintenanceTool"
+)
+
+if(TARGET Qt6::CorePrivate)
+    # Trust but verify: a found target whose include dirs are not on disk is worse than no target at
+    # all, because CMake only complains at generate time.
+    get_target_property(_qt6_priv_includes Qt6::CorePrivate INTERFACE_INCLUDE_DIRECTORIES)
+    set(_qt6_priv_ok TRUE)
+    foreach(inc IN LISTS _qt6_priv_includes)
+        if(NOT EXISTS "${inc}")
+            set(_qt6_priv_ok FALSE)
             break()
         endif()
     endforeach()
-    if(NOT _qt6_core_include_root)
-        message(
-            FATAL_ERROR
-                "Could not locate Qt6 private headers (qzipreader_p.h) under "
-                "any of Qt6::Core's interface include dirs: "
-                "${_qt6_core_includes}. Install qt.qt6.<ver>.qtbase via "
-                "MaintenanceTool or rebuild Qt from source to ship private "
-                "headers."
+    if(NOT _qt6_priv_ok)
+        if(NOT _qt6_core_include_root)
+            message(FATAL_ERROR ${_qt6_priv_hint})
+        endif()
+        # Headers exist somewhere else than the config claims — repoint the target.
+        set(_qt6_priv_include_a "${_qt6_core_include_root}/QtCore/${Qt6_VERSION}")
+        set(_qt6_priv_include_b "${_qt6_priv_include_a}/QtCore")
+        set_target_properties(
+            Qt6::CorePrivate PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
+                                        "${_qt6_priv_include_a};${_qt6_priv_include_b}"
         )
+        unset(_qt6_priv_include_a)
+        unset(_qt6_priv_include_b)
+        message(STATUS "Qt6::CorePrivate pointed at missing include dirs — repointed "
+                       "at ${_qt6_core_include_root}"
+        )
+    endif()
+    unset(_qt6_priv_includes)
+    unset(_qt6_priv_ok)
+else()
+    # Config absent. Qt private modules ship their headers inside the regular `qtbase` archive but
+    # the Qt6CorePrivate CMake config files are NOT included in the binary archives distributed via
+    # Qt's online installer / aqtinstall — only MaintenanceTool and source builds materialise them
+    # on disk. Synthesize an interface target that wires the private include directory the same way
+    # Qt's own Qt6CorePrivateTargets.cmake does. Private headers are header-only / inlined into
+    # libQt6Core, so no extra link target is required.
+    if(NOT _qt6_core_include_root)
+        message(FATAL_ERROR ${_qt6_priv_hint})
     endif()
     # Build the include-paths list in two halves so cmake-lint's 100-char line cap isn't tripped by
     # the long Qt path. Both halves are needed: the parent dir gives `<private/...>` resolution and
@@ -130,9 +181,10 @@ if(NOT TARGET Qt6::CorePrivate)
                    "binary distributions) — synthesised interface target from "
                    "Qt6::Core include dirs (${_qt6_core_include_root})"
     )
-    unset(_qt6_core_include_root)
-    unset(_qt6_core_includes)
 endif()
+unset(_qt6_priv_hint)
+unset(_qt6_core_include_root)
+unset(_qt6_core_includes)
 # P3.16 — Qt6::WebSockets is OPTIONAL. When present, SdPluginServer (Elgato Stream Deck
 # v6-compatible WebSocket plugin host) is built into the app + tests. When absent (common on minimal
 # Qt installs that ship only the default modules), the build still succeeds and plugin host

@@ -69,7 +69,8 @@ install_deps_fedora() {
     step "Installing build dependencies (Fedora/RHEL/openSUSE)"
     sudo_cmd dnf install -y \
         cmake ninja-build gcc-c++ git pkgconf-pkg-config \
-        qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
+        qt6-qtbase-devel qt6-qtbase-private-devel \
+        qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
         qt6-qttools-devel qt6-qtsvg-devel \
         python3-devel python3-pip \
         systemd-devel libudev-devel libusb1-devel \
@@ -105,7 +106,7 @@ install_deps_debian() {
     sudo_cmd apt-get update -qq
     apt_install_available \
         cmake ninja-build g++ git pkg-config \
-        qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+        qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-tools-dev \
         qt6-svg-dev libqt6svg6-dev \
         qt6-wayland-dev qt6-websockets-dev qt6-webengine-dev \
         libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \

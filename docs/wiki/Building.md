@@ -32,7 +32,8 @@ This page is a condensed walkthrough.
 
 ```bash
 sudo dnf install -y cmake ninja-build gcc-c++ \
-    qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
+    qt6-qtbase-devel qt6-qtbase-private-devel \
+    qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
     python3-devel systemd-devel libudev-devel \
     cargo rust
 ```
@@ -41,7 +42,8 @@ sudo dnf install -y cmake ninja-build gcc-c++ \
 
 ```bash
 sudo apt install -y cmake ninja-build g++ pkg-config \
-    qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-svg-dev \
+    qt6-base-dev qt6-base-private-dev \
+    qt6-declarative-dev qt6-tools-dev qt6-svg-dev \
     qt6-wayland-dev qt6-websockets-dev qt6-webengine-dev \
     libgl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-dev \
     libxcb1-dev libxcb-cursor-dev \
@@ -59,6 +61,12 @@ export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
 
 Notes on the Debian/Ubuntu list:
 
+- `qt6-base-private-dev` is **required**, not a developer extra. The app uses
+  `QZipReader` (`<private/qzipreader_p.h>`) to extract `.sdPlugin` archives.
+  Debian ships `Qt6CorePrivateConfig.cmake` in `qt6-base-dev` but the headers
+  themselves in `qt6-base-private-dev`, so with only the former installed
+  `find_package` succeeds and the build fails much later with
+  `Imported target "Qt6::CorePrivate" includes non-existent path`.
 - There is **no** `qt6-quickcontrols2-dev` package — QuickControls2 ships
   inside `qt6-declarative-dev`. Naming it aborts the whole `apt install`
   transaction, which is why `make bootstrap` used to install nothing.
