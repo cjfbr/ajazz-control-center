@@ -76,19 +76,27 @@ fi
 cd "$webui_dir"
 
 # Local UI patches (patches/opendeck/*.patch): device-layout fidelity fixes we
-# carry until upstreamed (keys -> touch strip -> dials row order matching the
-# physical hardware; rectangular touch-strip segments). Idempotent: an
-# already-applied patch (dev working tree) is detected via --reverse --check
-# and skipped; CI's pristine submodule checkout gets it applied fresh.
+# carry until upstreamed (key grid + touch strip on the left, dials in a column
+# to their right, matching the hardware; rectangular touch-strip segments).
+#
+# Restore the tracked tree to HEAD before applying. The submodule is pristine
+# upstream by contract -- every customization of ours lives in these patches --
+# so discarding tracked modifications is exactly right, and it is the only way
+# to be idempotent across patch EDITS. The previous logic tested "applies
+# cleanly" then "reverse-applies cleanly" and errored otherwise, which meant
+# any tree carrying an OLDER revision of a patch failed both tests: editing a
+# patch broke every working tree that already had it, with a message blaming a
+# submodule bump. Untracked files (node_modules/, build/) are left alone.
+git checkout -- . 2>/dev/null || true
+
 for p in "$repo_root"/patches/opendeck/*.patch; do
     [[ -e $p ]] || continue
-    if git apply --check "$p" 2>/dev/null; then
-        git apply "$p"
+    if git apply "$p" 2>/dev/null; then
         echo "build-webui: applied $(basename "$p")"
-    elif git apply --reverse --check "$p" 2>/dev/null; then
-        echo "build-webui: $(basename "$p") already applied"
     else
-        echo "build-webui: ERROR — $(basename "$p") does not apply (submodule bumped?)" >&2
+        echo "build-webui: ERROR — $(basename "$p") does not apply to a pristine" >&2
+        echo "  $(git rev-parse --short HEAD) checkout — the submodule was bumped and the" >&2
+        echo "  patch needs rebasing onto it." >&2
         exit 1
     fi
 done
