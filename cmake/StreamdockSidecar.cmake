@@ -119,14 +119,31 @@ function(ajazz_add_streamdock_sidecar app_target)
 
     # Stage beside the app binary so the dev/run layout resolves the sidecar via
     # applicationDirPath() without an install step.
-    add_custom_command(
-        TARGET ${app_target}
-        POST_BUILD
+    #
+    # This MUST NOT be a POST_BUILD step on the app target. POST_BUILD only runs
+    # when that target is actually relinked, so a Rust-only change rebuilt the
+    # sidecar (the ALL target above) while leaving the C++ app up to date -- and
+    # the stale copy beside the app survived. Every `cmake --build` then looked
+    # successful while running months-old sidecar code, which is exactly as
+    # confusing to debug as it sounds.
+    #
+    # A dedicated ALL target runs the copy on every build instead. It cannot be
+    # an add_custom_command(OUTPUT) either: $<TARGET_FILE_DIR> is not usable
+    # there, since CMake needs the output path at configure time to build the
+    # dependency graph. copy_if_different compares before writing, so the cost
+    # of running unconditionally is one file compare per build -- cheap next to
+    # silently shipping a stale sidecar.
+    add_custom_target(
+        streamdock_host_staged ALL
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${sidecar_binary}"
                 "$<TARGET_FILE_DIR:${app_target}>/${sidecar_name}"
+        DEPENDS "${sidecar_binary}"
         COMMENT "Staging streamdock-host beside ${app_target}"
         VERBATIM
     )
+    # The app target owns the directory the copy lands in, and the cargo target
+    # produces the file being copied; both must run first.
+    add_dependencies(streamdock_host_staged ${app_target} streamdock_host_sidecar)
     add_dependencies(${app_target} streamdock_host_sidecar)
 
     # Install beside the app. On macOS the app is a .app bundle, so the sidecar goes into
