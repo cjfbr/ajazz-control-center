@@ -122,24 +122,6 @@ ______________________________________________________________________
   explain away, so this may well stand. Worth one run of the sidecar (which now
   initializes at connect) before anyone spends another session on Frida.
 
-- [ ] **AKP03: the three non-LCD buttons are not bindable.** Hardware-confirmed
-  2026-08-24 on a `0x0300:0x3002` unit (they emit `0x25`/`0x30`/`0x31` with
-  both press and release edges): 6 LCD keys + 3 rotary encoders + 3
-  plain buttons below the grid. `mapAkp03Input` correctly decodes the plain
-  buttons (`0x25`/`0x30`/`0x31`) and emits `KeyPressed` at 1-based indices
-  7/8/9, which `StreamDockInputService` looks up as `Profile::keys[6..8]`. But
-  the descriptor declares `keyCount = 6` (the renderable LCD grid), and
-  `opendeck_bridge.cpp` routes any SPA position `>= keyCount` to the ENCODER
-  slots — so the editor never creates a binding at key index 6..8 and the three
-  buttons fire into nothing. No misfire: encoders live in a separate
-  `Profile::encoders` map, so the buttons do not steal an encoder's action.
-  Needs a product decision, since the two obvious fixes both have costs:
-  raising `keyCount` to 9 makes the editor offer image upload on screenless
-  buttons (and breaks the "+3 non-render wire slots" arithmetic that
-  `test_streamdeck_sidecar_geometry_contract.cpp` enforces), while a separate
-  "buttons" concept touches the descriptor, the profile schema and the SPA
-  layout. Verify against the physical unit before choosing.
-
 - [ ] **AKP05 v3 framing migration**. Per `[mirajazz]`'s protocol-version
   taxonomy (see `docs/protocols/streamdeck/_research-sources.md`), the
   Mirabox N4 / AKP05 family is a **protocol_version 3** device with

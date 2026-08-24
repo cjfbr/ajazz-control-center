@@ -18,8 +18,9 @@
  *     keyCount + touchZoneCount + the family's documented NON-RENDER wire slots:
  *       - AKP05  : +1  (BAT wire slot 5 is a dead/no-surface slot; kind.rs says
  *                       "10 keys + 4 enc; 15 mirajazz surfaces" -> 10 + 4 + 1 = 15)
- *       - AKP03  : +3  (3 physical side buttons; kind.rs says "9 buttons + 3 enc"
- *                       -> 6 LCD keys + 3 side buttons = 9, no touch zones)
+ *       - AKP03  : +0  (the app declares all 9 bindable buttons since
+ *                       2026-08-24 -- 6 LCD keys + 3 plain buttons -- so the
+ *                       renderable count already equals the wire count)
  *       - AKP153 : +0  (15 keys, no encoders, no strip -> 15 + 0 + 0 = 15)
  *
  * If kind.rs and register.cpp ever drift (a new SKU added to one but not the other,
@@ -61,24 +62,26 @@ constexpr std::array<SidecarContract, 25> kSidecarContract = {{
     {0x0300, 0x3006, 15, 4, 1}, // Ajazz AKP05 retail (provisional)
     {0x0300, 0x5001, 15, 4, 1}, // Ajazz AKP05 (provisional)
     {0x6603, 0x1007, 15, 4, 1}, // Mirabox N4
-    // --- AKP03 / N3: 6 LCD keys + 3 plain buttons = 9 wire slots, 3 encoders.
+    // --- AKP03 / N3: 9 bindable buttons (6 with displays) = 9 wire slots, 3
+    // encoders. nonRenderWireSlots is 0 since 2026-08-24: the app now declares
+    // all nine, so the two layers agree exactly.
     // pv2 silicon (60x60 Rot0):
-    {0x0300, 0x1001, 9, 3, 3}, // Ajazz AKP03
-    {0x0300, 0x1002, 9, 3, 3}, // Ajazz AKP03E
-    {0x0300, 0x1003, 9, 3, 3}, // Ajazz AKP03R
-    {0x6602, 0x1000, 9, 3, 3}, // Mirabox N3 (6602:1000)
-    {0x6602, 0x1002, 9, 3, 3}, // Mirabox N3 (6602:1002)
-    {0x0300, 0x3001, 9, 3, 3}, // Ajazz AKP03 (legacy, in-tree only)
-    {0x6602, 0x1003, 9, 3, 3}, // Mirabox N3E (in-tree only)
+    {0x0300, 0x1001, 9, 3, 0}, // Ajazz AKP03
+    {0x0300, 0x1002, 9, 3, 0}, // Ajazz AKP03E
+    {0x0300, 0x1003, 9, 3, 0}, // Ajazz AKP03R
+    {0x6602, 0x1000, 9, 3, 0}, // Mirabox N3 (6602:1000)
+    {0x6602, 0x1002, 9, 3, 0}, // Mirabox N3 (6602:1002)
+    {0x0300, 0x3001, 9, 3, 0}, // Ajazz AKP03 (legacy, in-tree only)
+    {0x6602, 0x1003, 9, 3, 0}, // Mirabox N3E (in-tree only)
     // pv3 silicon (64x64 Rot90):
-    {0x0300, 0x3002, 9, 3, 3}, // Ajazz AKP03E rev. 2
-    {0x0300, 0x3003, 9, 3, 3}, // Ajazz AKP03R rev. 2
-    {0x6603, 0x1002, 9, 3, 3}, // Mirabox N3 (rev. 3)
-    {0x6603, 0x1003, 9, 3, 3}, // Mirabox N3EN
-    {0x1500, 0x3001, 9, 3, 3}, // Soomfon Stream Controller SE
-    {0x0b00, 0x1001, 9, 3, 3}, // Mars Gaming MSD-TWO
-    {0x5548, 0x1001, 9, 3, 3}, // TreasLin N3
-    {0x0200, 0x2000, 9, 3, 3}, // Redragon Skyrider SS-551
+    {0x0300, 0x3002, 9, 3, 0}, // Ajazz AKP03E rev. 2
+    {0x0300, 0x3003, 9, 3, 0}, // Ajazz AKP03R rev. 2
+    {0x6603, 0x1002, 9, 3, 0}, // Mirabox N3 (rev. 3)
+    {0x6603, 0x1003, 9, 3, 0}, // Mirabox N3EN
+    {0x1500, 0x3001, 9, 3, 0}, // Soomfon Stream Controller SE
+    {0x0b00, 0x1001, 9, 3, 0}, // Mars Gaming MSD-TWO
+    {0x5548, 0x1001, 9, 3, 0}, // TreasLin N3
+    {0x0200, 0x2000, 9, 3, 0}, // Redragon Skyrider SS-551
     // --- AKP153 / HSV293S (pv1): 15 keys, no encoders, no strip.
     // NOTE 0x0300:0x1001 and 0x0300:0x1002 are NOT here: they are AKP03 SKUs
     // (above). See the register.cpp note dated 2026-08-21.

@@ -248,3 +248,33 @@ TEST_CASE("AKP03 encoders have no screens and reject zone uploads",
     std::vector<std::uint8_t> rgba(4, 0);
     REQUIRE_NOTHROW(dev.setEncoderImage(0, rgba, 1, 1)); // no-op, no crash
 }
+
+TEST_CASE("AKP03 declares all nine bindable buttons, not just the six with screens",
+          "[sidecar][device][geometry][akp03]") {
+    // The three plain buttons under the LCD grid emit input (0x25/0x30/0x31 ->
+    // KeyPressed 7/8/9 -> Profile::keys[6..8]), but the editor draws keyCount
+    // cells and routes anything past keyCount to the ENCODER slots. While
+    // keyCount was 6 those three buttons had nowhere to bind: confirmed dead in
+    // the UI on a 0x0300:0x3002 unit whose owner could see only the six keys and
+    // three dials.
+    for (auto const& codename : {"akp03", "akp03e", "akp03e_rev2", "mirabox_n3"}) {
+        auto const d = descriptorFor(codename);
+        CAPTURE(codename);
+        REQUIRE(d.keyCount == 9);       // 6 LCD + 3 plain
+        REQUIRE(d.gridColumns == 3);    // 3 across
+        REQUIRE(d.keyRows == 3);        // 2 LCD rows + the plain-button row
+        REQUIRE(d.encoderCount == 3);   // dials stay separate (Profile::encoders)
+        REQUIRE(d.touchZoneCount == 0); // no strip on this family
+    }
+}
+
+TEST_CASE("every AKP03 button index maps to a wire slot that exists",
+          "[sidecar][device][geometry][akp03]") {
+    // Raising keyCount to 9 is only safe because the wire has nine surfaces:
+    // key 9 must not address slot 9 or beyond (mirajazz writes key + 1).
+    auto const d = descriptorFor("akp03e_rev2");
+    for (std::uint8_t k = 1; k <= d.keyCount; ++k) {
+        CAPTURE(k);
+        REQUIRE(hwKeyForKeyIndex(DockFamily::Akp03, k) < 9);
+    }
+}

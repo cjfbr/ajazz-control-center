@@ -54,6 +54,22 @@ Confirmed on this unit since:
   retracted. **Before declaring any Stream Dock's input unreachable, send one
   output command first.**
 
+### Editor geometry
+
+The app models this family as **9 bindable buttons in a 3x3 grid** (`keyCount`
+9, `gridColumns` 3, `keyRows` 3), of which only the top six have displays, plus
+3 encoders held separately. The bottom row is the plain buttons; binding them
+works, uploading an image to them is accepted and ignored by the device.
+
+Before 2026-08-24 `keyCount` was 6 — the count of *renderable* surfaces rather
+than *bindable* ones — and the three plain buttons had nowhere to bind: the
+editor draws `keyCount` cells and routes anything past it to the encoder slots.
+They emitted input the whole time; nothing could receive it.
+
+The dials render in a column to the right of the key grid rather than stacked
+underneath (`patches/opendeck/0001-device-layout-fidelity.patch`), matching
+where they sit on the hardware.
+
 ### Confirmed input codes (2026-08-24)
 
 Captured from this unit after initialization. Frame layout

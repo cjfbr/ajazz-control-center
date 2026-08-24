@@ -65,16 +65,31 @@ std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors() {
                                 .encoderCount = 0,
                                 .keyRows = 3};
     };
+    // AKP03 geometry is 3 columns x 3 rows of BINDABLE buttons: the top two rows
+    // are the 6 LCD keys, the third is the 3 plain buttons under the grid. Only
+    // the first six have displays.
+    //
+    // keyCount was 6 until 2026-08-24, counting renderable surfaces rather than
+    // bindable ones. The plain buttons emit input (0x25/0x30/0x31 -> KeyPressed
+    // 7/8/9 -> Profile::keys[6..8]) but the editor draws `keyCount` cells and
+    // routes anything past it to the encoder slots, so those three buttons had
+    // nowhere to bind — hardware-confirmed dead in the UI on a 0x0300:0x3002
+    // unit. Declaring all nine makes the third row bindable and, as a bonus,
+    // aligns this count with the sidecar's 9 wire surfaces, retiring the
+    // "non-render wire slots" fudge the geometry contract test carried.
+    //
+    // The editor will offer image upload on the bottom row; those writes land on
+    // wire surfaces with no display and are simply ignored by the device.
     auto akp03 = [](std::uint16_t vid, std::uint16_t pid, char const* model, char const* code) {
         return DeviceDescriptor{.vendorId = vid,
                                 .productId = pid,
                                 .family = DeviceFamily::StreamDeck,
                                 .model = model,
                                 .codename = code,
-                                .keyCount = 6,
+                                .keyCount = 9,
                                 .gridColumns = 3,
                                 .encoderCount = 3,
-                                .keyRows = 2};
+                                .keyRows = 3};
     };
     auto akp05 = [](std::uint16_t vid, std::uint16_t pid, char const* model, char const* code) {
         return DeviceDescriptor{.vendorId = vid,

@@ -29,21 +29,21 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | streamdeck | [AJAZZ AKP153E](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1010` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware, clock |
 | streamdeck | [AJAZZ AKP153R](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1020` | 15 | 0 | 🟡 scaffolded | display, rgb, macros, firmware, clock |
 | streamdeck | [AJAZZ AKP815](docs/protocols/streamdeck/akp815.md) | `0x5548:0x6672` | 15 | 0 | 🔵 probed | display, macros, firmware, clock |
-| streamdeck | [AJAZZ AKP03](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1001` | 6 | 3 | 🟢 functional | display, encoder, macros, clock |
-| streamdeck | [AJAZZ AKP03 (legacy 0x3001 firmware)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 3 | 🟢 functional | display, encoder, macros, clock |
-| streamdeck | [AJAZZ AKP03E](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1002` | 6 | 3 | 🟢 functional | display, encoder, macros, clock |
-| streamdeck | [AJAZZ AKP03E rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3002` | 6 | 3 | 🟢 functional | display, encoder, macros, clock |
-| streamdeck | [AJAZZ AKP03R](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1003` | 6 | 3 | 🟢 functional | display, encoder, macros, clock |
-| streamdeck | [AJAZZ AKP03R rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3003` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Mirabox N3 (rev. 1)](docs/protocols/streamdeck/mirabox_n3.md) | `0x6602:0x1002` | 6 | 3 | 🟠 partial | display, encoder, macros, clock |
-| streamdeck | [Mirabox N3E (rev. 1)](docs/protocols/streamdeck/akp03.md) | `0x6602:0x1003` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Mirabox N3 (rev. 3)](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1002` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Mirabox N3EN](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1003` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Mirabox N3 (6602:1000)](docs/protocols/streamdeck/mirabox_n3.md) | `0x6602:0x1000` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Soomfon Stream Controller SE](docs/protocols/streamdeck/akp03.md) | `0x1500:0x3001` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Mars Gaming MSD-TWO](docs/protocols/streamdeck/akp03.md) | `0x0b00:0x1001` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [TreasLin N3](docs/protocols/streamdeck/akp03.md) | `0x5548:0x1001` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
-| streamdeck | [Redragon Skyrider SS-551](docs/protocols/streamdeck/akp03.md) | `0x0200:0x2000` | 6 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1001` | 9 | 3 | 🟢 functional | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03 (legacy 0x3001 firmware)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 9 | 3 | 🟢 functional | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03E](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1002` | 9 | 3 | 🟢 functional | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03E rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3002` | 9 | 3 | 🟢 functional | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03R](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1003` | 9 | 3 | 🟢 functional | display, encoder, macros, clock |
+| streamdeck | [AJAZZ AKP03R rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3003` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Mirabox N3 (rev. 1)](docs/protocols/streamdeck/mirabox_n3.md) | `0x6602:0x1002` | 9 | 3 | 🟠 partial | display, encoder, macros, clock |
+| streamdeck | [Mirabox N3E (rev. 1)](docs/protocols/streamdeck/akp03.md) | `0x6602:0x1003` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Mirabox N3 (rev. 3)](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1002` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Mirabox N3EN](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1003` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Mirabox N3 (6602:1000)](docs/protocols/streamdeck/mirabox_n3.md) | `0x6602:0x1000` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Soomfon Stream Controller SE](docs/protocols/streamdeck/akp03.md) | `0x1500:0x3001` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Mars Gaming MSD-TWO](docs/protocols/streamdeck/akp03.md) | `0x0b00:0x1001` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [TreasLin N3](docs/protocols/streamdeck/akp03.md) | `0x5548:0x1001` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
+| streamdeck | [Redragon Skyrider SS-551](docs/protocols/streamdeck/akp03.md) | `0x0200:0x2000` | 9 | 3 | 🟡 scaffolded | display, encoder, macros, clock |
 | streamdeck | [AJAZZ AKP05 / AKP05E (provisional)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 10 | 4 | 🟡 scaffolded | display, encoder, touch, macros, clock |
 | streamdeck | [Mirabox N4 / AJAZZ AKP05 family](docs/protocols/streamdeck/akp05.md) | `0x6603:0x1007` | 10 | 4 | 🟡 scaffolded | display, encoder, touch, macros, clock |
 | streamdeck | [AJAZZ AKP05E (Stream Dock Plus)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x3004` | 10 | 4 | 🟠 partial | display, encoder, touch, macros |

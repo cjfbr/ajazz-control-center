@@ -141,7 +141,7 @@ devices:
     name: "AJAZZ AKP03"
     vid: "0x0300"
     pid: "0x1001"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
@@ -153,7 +153,7 @@ devices:
     name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
     vid: "0x0300"
     pid: "0x3001"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
@@ -165,7 +165,7 @@ devices:
     name: "AJAZZ AKP03E"
     vid: "0x0300"
     pid: "0x1002"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
@@ -177,7 +177,7 @@ devices:
     name: "AJAZZ AKP03E rev. 2"
     vid: "0x0300"
     pid: "0x3002"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
@@ -189,7 +189,7 @@ devices:
     name: "AJAZZ AKP03R"
     vid: "0x0300"
     pid: "0x1003"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: functional
     capabilities: [display, encoder, macros, clock]
@@ -201,7 +201,7 @@ devices:
     name: "AJAZZ AKP03R rev. 2"
     vid: "0x0300"
     pid: "0x3003"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -213,7 +213,7 @@ devices:
     name: "Mirabox N3 (rev. 1)"
     vid: "0x6602"
     pid: "0x1002"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: partial
     capabilities: [display, encoder, macros, clock]
@@ -235,7 +235,7 @@ devices:
     name: "Mirabox N3E (rev. 1)"
     vid: "0x6602"
     pid: "0x1003"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -247,7 +247,7 @@ devices:
     name: "Mirabox N3 (rev. 3)"
     vid: "0x6603"
     pid: "0x1002"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -259,7 +259,7 @@ devices:
     name: "Mirabox N3EN"
     vid: "0x6603"
     pid: "0x1003"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -271,7 +271,7 @@ devices:
     name: "Mirabox N3 (6602:1000)"
     vid: "0x6602"
     pid: "0x1000"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -283,7 +283,7 @@ devices:
     name: "Soomfon Stream Controller SE"
     vid: "0x1500"
     pid: "0x3001"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -295,7 +295,7 @@ devices:
     name: "Mars Gaming MSD-TWO"
     vid: "0x0b00"
     pid: "0x1001"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -307,7 +307,7 @@ devices:
     name: "TreasLin N3"
     vid: "0x5548"
     pid: "0x1001"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
@@ -319,7 +319,7 @@ devices:
     name: "Redragon Skyrider SS-551"
     vid: "0x0200"
     pid: "0x2000"
-    keys: 6
+    keys: 9
     encoders: 3
     maturity: scaffolded
     capabilities: [display, encoder, macros, clock]

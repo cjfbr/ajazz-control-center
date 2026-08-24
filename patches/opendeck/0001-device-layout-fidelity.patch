@@ -1,5 +1,5 @@
 diff --git a/src/components/DeviceView.svelte b/src/components/DeviceView.svelte
-index e97db8a..c9f4ac5 100644
+index e97db8a..9b50d95 100644
 --- a/src/components/DeviceView.svelte
 +++ b/src/components/DeviceView.svelte
 @@ -82,11 +82,11 @@
@@ -17,57 +17,76 @@ index e97db8a..c9f4ac5 100644
 
  	function flatIndexFromRowCol(row: number, col: number): number {
  		let index = 0;
-@@ -210,34 +210,35 @@
+@@ -189,6 +189,15 @@
+ 		on:keydown|capture={handleGridKeydown}
+ 		on:focusin={handleGridFocusin}
+ 	>
++		<!-- Keys on the left, dials in a column on their right. Stacking the
++		     dials under the grid (upstream's layout) misrepresents every device
++		     whose knobs sit beside the keys rather than below them, and on a
++		     3x3 grid it also pushed them off the bottom of a centred,
++		     overflow-auto container. -->
++		<div class="flex flex-row items-center">
++		<!-- Left column: the key grid with the touch strip (when present)
++		     beneath it, exactly as they sit on the hardware. -->
++		<div class="flex flex-col">
+ 		<div class="flex flex-col" role="rowgroup">
+ 			{#each { length: device.rows } as _, r}
+ 				<div class="flex flex-row" role="row">
+@@ -209,22 +218,6 @@
+ 			{/each}
  		</div>
 
- 		<div class="flex flex-row" role="row">
+-		<div class="flex flex-row" role="row">
 -			{#each { length: device.encoders } as _, i}
-+			{#each { length: device.touchpoints } as _, i}
- 				<Key
+-				<Key
 -					context={{ device: device.id, profile: profile.id, controller: "Encoder", position: i }}
 -					bind:inslot={profile.sliders[i]}
-+					context={{ device: device.id, profile: profile.id, controller: "Keypad", position: (device.rows * device.columns) + i }}
-+					bind:inslot={profile.keys[(device.rows * device.columns) + i]}
- 					on:dragover={handleDragOver}
+-					on:dragover={handleDragOver}
 -					on:drop={(event) => handleDrop(event, "Encoder", i)}
 -					on:dragstart={(event) => handleDragStart(event, "Encoder", i)}
-+					on:drop={(event) => handleDrop(event, "Keypad", (device.rows * device.columns) + i)}
-+					on:dragstart={(event) => handleDragStart(event, "Keypad", (device.rows * device.columns) + i)}
- 					{handlePaste}
- 					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
+-					{handlePaste}
+-					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
 -					label="Encoder {i + 1}"
 -					tabindex={focusedRow === encoderRowIndex && focusedCol === i ? 0 : -1}
-+					isTouchPoint
-+					height={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 96 : 72}
-+					label="Touch point {i + 1}"
-+					tabindex={focusedRow === touchpointRowIndex && focusedCol === i ? 0 : -1}
- 				/>
- 			{/each}
- 		</div>
-
+-				/>
+-			{/each}
+-		</div>
+-
  		<div class="flex flex-row" role="row">
--			{#each { length: device.touchpoints } as _, i}
-+			{#each { length: device.encoders } as _, i}
+ 			{#each { length: device.touchpoints } as _, i}
  				<Key
--					context={{ device: device.id, profile: profile.id, controller: "Keypad", position: (device.rows * device.columns) + i }}
--					bind:inslot={profile.keys[(device.rows * device.columns) + i]}
-+					context={{ device: device.id, profile: profile.id, controller: "Encoder", position: i }}
-+					bind:inslot={profile.sliders[i]}
- 					on:dragover={handleDragOver}
--					on:drop={(event) => handleDrop(event, "Keypad", (device.rows * device.columns) + i)}
--					on:dragstart={(event) => handleDragStart(event, "Keypad", (device.rows * device.columns) + i)}
-+					on:drop={(event) => handleDrop(event, "Encoder", i)}
-+					on:dragstart={(event) => handleDragStart(event, "Encoder", i)}
+@@ -236,10 +229,30 @@
  					{handlePaste}
  					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
--					isTouchPoint
--					label="Touch point {i + 1}"
--					tabindex={focusedRow === touchpointRowIndex && focusedCol === i ? 0 : -1}
-+					label="Encoder {i + 1}"
-+					tabindex={focusedRow === encoderRowIndex && focusedCol === i ? 0 : -1}
+ 					isTouchPoint
++					height={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 96 : 72}
+ 					label="Touch point {i + 1}"
+ 					tabindex={focusedRow === touchpointRowIndex && focusedCol === i ? 0 : -1}
  				/>
  			{/each}
  		</div>
++		</div>
++
++		<!-- Right column: the dials. -->
++		<div class="flex flex-col justify-center" role="row">
++			{#each { length: device.encoders } as _, i}
++				<Key
++					context={{ device: device.id, profile: profile.id, controller: "Encoder", position: i }}
++					bind:inslot={profile.sliders[i]}
++					on:dragover={handleDragOver}
++					on:drop={(event) => handleDrop(event, "Encoder", i)}
++					on:dragstart={(event) => handleDragStart(event, "Encoder", i)}
++					{handlePaste}
++					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
++					label="Encoder {i + 1}"
++					tabindex={focusedRow === encoderRowIndex && focusedCol === i ? 0 : -1}
++				/>
++			{/each}
++		</div>
++		</div>
+ 	</div>
+ {/key}
 diff --git a/src/components/Key.svelte b/src/components/Key.svelte
 index 6629c34..a83b7f0 100644
 --- a/src/components/Key.svelte
