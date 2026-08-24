@@ -13,7 +13,18 @@ This page is a condensed walkthrough.
 | C++ compiler  | GCC 13 / Clang 17 / MSVC 19.39 | C++20                                                      |
 | Qt            | 6.7                            | `Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `Widgets` |
 | Python        | 3.11 (runtime only)            | system `python3` invoked by the OOP plugin host at runtime |
+| Rust / cargo  | current stable                 | **required for Stream Docks** — see below                  |
 | libusb/hidapi | bundled via FetchContent       | no system install needed                                   |
+
+> **Rust is not optional if you own a Stream Dock.** The AKP03 / AKP05 /
+> AKP153 families (and the Mirabox and licensee rebadges) are driven by the
+> out-of-process Rust sidecar in `streamdock-host/`, built by cargo and bundled
+> next to the app binary. Without cargo the CMake build only prints a warning
+> and produces an app that cannot drive **any** Stream Dock: the device
+> enumerates and appears in the sidebar, and nothing else happens. Distro Rust
+> packages are often too old for the dependency tree; if the build fails, use
+> [rustup](https://rustup.rs). Pass `-DAJAZZ_BUILD_SIDECAR=OFF` only if you
+> deliberately want a build without Stream Dock support.
 
 ### Distro-specific packages
 
@@ -22,7 +33,8 @@ This page is a condensed walkthrough.
 ```bash
 sudo dnf install -y cmake ninja-build gcc-c++ \
     qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
-    python3-devel systemd-devel libudev-devel
+    python3-devel systemd-devel libudev-devel \
+    cargo rust
 ```
 
 **Debian / Ubuntu (24.04+):**
@@ -30,13 +42,14 @@ sudo dnf install -y cmake ninja-build gcc-c++ \
 ```bash
 sudo apt install -y cmake ninja-build g++ \
     qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
-    python3-dev libudev-dev
+    python3-dev libudev-dev \
+    cargo rustc
 ```
 
 **macOS (Homebrew):**
 
 ```bash
-brew install cmake ninja qt@6 python@3.11
+brew install cmake ninja qt@6 python@3.11 rust
 export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
 ```
 

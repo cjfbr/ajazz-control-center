@@ -11,9 +11,10 @@
 #   1. Detects your distro / OS.
 #   2. Installs all build-time dependencies via the native package manager
 #      (prompts once for sudo, only if needed). macOS uses Homebrew.
-#   3. Installs the udev rule (Linux only).
-#   4. Configures and builds the project with the `dev` preset.
-#   5. Prints the exact command to launch the freshly-built binary.
+#   3. Verifies the Rust toolchain can build the Stream Dock sidecar.
+#   4. Installs the udev rule (Linux only).
+#   5. Configures and builds the project with the `dev` preset.
+#   6. Prints the exact command to launch the freshly-built binary.
 #
 # You can re-run this script any time; dependency install is idempotent.
 # ============================================================================
@@ -72,7 +73,8 @@ install_deps_fedora() {
         qt6-qttools-devel qt6-qtsvg-devel \
         python3-devel python3-pip \
         systemd-devel libudev-devel libusb1-devel \
-        clang-tools-extra
+        clang-tools-extra \
+        cargo rust
 }
 
 install_deps_debian() {
@@ -84,7 +86,8 @@ install_deps_debian() {
         qt6-tools-dev libqt6svg6-dev \
         python3-dev python3-pip \
         libudev-dev libsystemd-dev libusb-1.0-0-dev \
-        clang-format clang-tidy
+        clang-format clang-tidy \
+        cargo rustc
 }
 
 install_deps_arch() {
@@ -93,7 +96,7 @@ install_deps_arch() {
         cmake ninja gcc git pkgconf \
         qt6-base qt6-declarative qt6-tools qt6-svg \
         python python-pip systemd-libs libusb \
-        clang
+        clang rust
 }
 
 install_deps_macos() {
@@ -101,7 +104,7 @@ install_deps_macos() {
     if ! need brew; then
         die "Homebrew not found. Install it first: https://brew.sh"
     fi
-    brew install cmake ninja qt@6 python@3.11 pkg-config
+    brew install cmake ninja qt@6 python@3.11 pkg-config rust
     local qt_prefix
     qt_prefix=$(brew --prefix qt@6)
     export CMAKE_PREFIX_PATH="$qt_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
@@ -116,10 +119,20 @@ install_udev() {
         return
     }
     step "Installing udev rule (user-level device access, no logout required)"
+    # Drop the pre-2026 filename if a copy is still around: 99- sorts AFTER the
+    # stock 73-seat-late.rules that applies the uaccess ACL, so it never worked.
+    sudo_cmd rm -f /etc/udev/rules.d/99-ajazz.rules
     sudo_cmd install -m 644 "$rule" /etc/udev/rules.d/70-ajazz.rules
     sudo_cmd udevadm control --reload-rules
     sudo_cmd udevadm trigger
-    ok "udev configured — replug the device is NOT required"
+    ok "udev configured — no group membership and no logout required"
+    # Correctness matters here: this used to claim a replug was NOT required.
+    # On systemd >= 258 (verified on 259) the uaccess ACL is applied only on a
+    # real physical replug or at boot -- never on `udevadm trigger`. Claiming
+    # otherwise sends people hunting for an app bug when /dev/hidraw* is still
+    # root-only. See CLAUDE.md "Linux device access".
+    info "If the device is plugged in right now, UNPLUG AND REPLUG IT:"
+    info "on systemd >= 258 the uaccess ACL only lands on a physical replug."
 }
 
 # ---------- distro detection ----------------------------------------------
@@ -146,6 +159,32 @@ detect_and_install() {
         die "cannot detect Linux distro (no /etc/os-release)"
     fi
     install_udev
+}
+
+# ---------- Rust toolchain (Stream Dock sidecar) ---------------------------
+# The Stream Dock families (AKP03 / AKP05 / AKP153, plus the Mirabox and
+# licensee rebadges) are driven by the out-of-process Rust sidecar in
+# streamdock-host/, not by in-tree C++ wire code. When cargo is missing the
+# CMake build only emits a warning and produces an app that silently cannot
+# drive ANY Stream Dock -- the device enumerates, the sidebar lists it, and
+# nothing else happens. Fail loudly here instead of shipping that build.
+#
+# The check is empirical (`cargo check`) rather than a hardcoded minimum
+# version: distro Rust is often a year behind and whether it suffices depends
+# on the dependency tree, not on a number we would have to keep guessing.
+verify_rust_toolchain() {
+    step "Verifying the Rust toolchain can build the Stream Dock sidecar"
+    local rustup_hint="Install a current toolchain:  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    if ! need cargo; then
+        die "cargo not found after dependency install. $rustup_hint"
+    fi
+    info "$(cargo --version)"
+    if ! (cd "$ROOT/streamdock-host" && cargo check --locked --quiet); then
+        warn "the installed Rust toolchain cannot build streamdock-host."
+        warn "This is usually a distro toolchain that is too old."
+        die "$rustup_hint"
+    fi
+    ok "Rust toolchain OK — Stream Dock sidecar will be built and bundled"
 }
 
 # ---------- pre-commit hooks ----------------------------------------------
@@ -179,6 +218,7 @@ build() {
 main() {
     cd "$ROOT"
     detect_and_install
+    verify_rust_toolchain
     install_precommit
     build
     cat <<EOF
