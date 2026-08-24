@@ -227,9 +227,20 @@ struct DeviceEntry {
 
 type DeviceMap = Arc<Mutex<HashMap<String, DeviceEntry>>>;
 
-/// Emit one JSON line to stdout. `println!` locks stdout, so tasks don't interleave.
+/// Emit one JSON line to stdout. Locking stdout keeps tasks from interleaving.
+///
+/// Does NOT use `println!`, which panics when the reader closes the pipe — a
+/// plain `streamdock-host --list | head -2` ended in
+/// `panicked at ... failed printing to stdout: Broken pipe`. A diagnostic tool
+/// that panics when you pipe it into `head` is not much of a diagnostic tool.
+/// Treat a closed pipe as the normal end of output and exit quietly.
 fn emit(obj: serde_json::Value) {
-    println!("{obj}");
+    use std::io::Write;
+    let stdout = std::io::stdout();
+    let mut lock = stdout.lock();
+    if writeln!(lock, "{obj}").is_err() {
+        std::process::exit(0);
+    }
 }
 
 fn noop_process(_input: u8, _state: u8) -> Result<DeviceInput, MirajazzError> {
